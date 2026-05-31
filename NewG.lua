@@ -109,8 +109,19 @@ if success and wm and type(wm) == "table" then
                                     data.Tool:SetAttribute("MaxSpread", 0)
                                 end
                                 if fastBoltEnabled then
-                                    if data.Cycle then data.Cycle = false end
-                                    if data.clientCanFire == false then data.clientCanFire = true end
+                                    pcall(function()
+                                        if data.animationList then
+                                            if data.animationList.boltCycleAnimation and data.animationList.boltCycleAnimation.IsPlaying then 
+                                                data.animationList.boltCycleAnimation:AdjustSpeed(20) 
+                                            end
+                                            if data.animationList.aimFireAnimation and data.animationList.aimFireAnimation.IsPlaying then 
+                                                data.animationList.aimFireAnimation:AdjustSpeed(20) 
+                                            end
+                                            if data.animationList.hipFireAnimation and data.animationList.hipFireAnimation.IsPlaying then 
+                                                data.animationList.hipFireAnimation:AdjustSpeed(20) 
+                                            end
+                                        end
+                                    end)
                                 end
                             end)
                         end
@@ -120,14 +131,23 @@ if success and wm and type(wm) == "table" then
             return oldEquip(data, action)
         end)))
     end
-    
-    if rawget(wm, "Cycle") then
+
+    if rawget(wm, "Cycle") or rawget(wm, "boltCycleAction") then
+        local targetFunc = rawget(wm, "boltCycleAction") or rawget(wm, "Cycle")
         local oldCycle
-        oldCycle = clonefunction(hookfunction(rawget(wm, "Cycle"), newcclosure(function(data, ...)
+        oldCycle = clonefunction(hookfunction(targetFunc, newcclosure(function(data, ...)
             if fastBoltEnabled then
                 if type(data) == "table" then
                     data.Cycle = false
                     data.clientCanFire = true
+                    if data.animationList then
+                        if data.animationList.boltCycleAnimation then pcall(function() data.animationList.boltCycleAnimation:Stop() end) end
+                        if data.animationList.aimFireAnimation then pcall(function() data.animationList.aimFireAnimation:Stop() end) end
+                        if data.animationList.hipFireAnimation then pcall(function() data.animationList.hipFireAnimation:Stop() end) end
+                        if data.animationList.equipAnimation and not data.animationList.equipAnimation.IsPlaying then 
+                            pcall(function() data.animationList.equipAnimation:Play() end) 
+                        end
+                    end
                 end
                 return
             end
@@ -135,20 +155,6 @@ if success and wm and type(wm) == "table" then
         end)))
     end
 
-    if rawget(wm, "Action") then
-        local oldAction
-        oldAction = clonefunction(hookfunction(rawget(wm, "Action"), newcclosure(function(data, ...)
-            if fastBoltEnabled then
-                if type(data) == "table" then
-                    data.Action = false
-                    data.clientCanFire = true
-                end
-                return
-            end
-            return oldAction(data, ...)
-        end)))
-    end
-    
     LocalPlayer.CharacterAdded:Connect(function()
         pcall(function()
             if recoilThread then coroutine.close(recoilThread); recoilThread = nil end
@@ -173,13 +179,6 @@ local aimKey = Enum.UserInputType.MouseButton2
 local aimPart = "Head"
 local fovSize = 150
 local fovColor = Color3.new(1,0,0)
-local fovColorIndex = 1
-local fovColors = {
-    Color3.new(1,0,0), Color3.new(0,1,0), Color3.new(0,0,1),
-    Color3.new(1,1,0), Color3.new(1,0,1), Color3.new(0,1,1),
-    Color3.new(1,1,1)
-}
-local fovColorNames = {"Red","Green","Blue","Yellow","Pink","Cyan","White"}
 
 local silentAimDistance = 1000
 
@@ -200,9 +199,6 @@ local antiAfkEnabled = false
 local antiAfkConnection = nil
 local boostFpsEnabled = false
 
-local menuKey = Enum.KeyCode.LeftAlt
-local isSettingMenuKey = false
-local isSettingAimKey = false
 local scriptUnloaded = false
 
 local fovCircle = nil
@@ -299,128 +295,6 @@ local function isTargetVisible(target, targetPos)
     local char = target.Parent
     if not char then return false end
     return isPointVisible(targetPos, char)
-end
-
-local function createButton(parent, text, yPos, width)
-    local container = Instance.new("Frame", parent)
-    container.Size = UDim2.new(1, 0, 0, 38)
-    container.BackgroundTransparency = 1
-    
-    local btn = Instance.new("TextButton", container)
-    btn.Size = UDim2.new(1, 0, 1, 0)
-    btn.Text = text
-    btn.Font = Enum.Font.GothamSemibold
-    btn.TextSize = 13
-    btn.TextColor3 = Color3.fromRGB(240, 240, 240)
-    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    btn.AutoButtonColor = false
-    btn.ClipsDescendants = true
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-    
-    local stroke = Instance.new("UIStroke", btn)
-    stroke.Color = Color3.fromRGB(50, 50, 60)
-    stroke.Thickness = 1
-
-    btn.MouseEnter:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(40, 40, 48)}):Play()
-        TweenService:Create(stroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(0, 170, 255)}):Play()
-    end)
-    btn.MouseLeave:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(30, 30, 35)}):Play()
-        TweenService:Create(stroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(50, 50, 60)}):Play()
-    end)
-    
-    btn.MouseButton1Down:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(25, 25, 30)}):Play()
-    end)
-    btn.MouseButton1Up:Connect(function()
-        TweenService:Create(btn, TweenInfo.new(0.1), {BackgroundColor3 = Color3.fromRGB(40, 40, 48)}):Play()
-    end)
-
-    return btn
-end
-
-local function createSlider(parent, label, minVal, maxVal, defaultValue, yPos, onChange)
-    local container = Instance.new("Frame", parent)
-    container.Size = UDim2.new(1, 0, 0, 50)
-    container.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    Instance.new("UICorner", container).CornerRadius = UDim.new(0, 6)
-    
-    local stroke = Instance.new("UIStroke", container)
-    stroke.Color = Color3.fromRGB(50, 50, 60)
-    stroke.Thickness = 1
-
-    local labelObj = Instance.new("TextLabel", container)
-    labelObj.Size = UDim2.new(1, -20, 0, 20)
-    labelObj.Position = UDim2.new(0, 10, 0, 5)
-    labelObj.BackgroundTransparency = 1
-    labelObj.Text = label .. ": " .. defaultValue
-    labelObj.Font = Enum.Font.Gotham
-    labelObj.TextSize = 12
-    labelObj.TextColor3 = Color3.fromRGB(200, 200, 200)
-    labelObj.TextXAlignment = Enum.TextXAlignment.Left
-
-    local sliderBg = Instance.new("Frame", container)
-    sliderBg.Size = UDim2.new(1, -20, 0, 6)
-    sliderBg.Position = UDim2.new(0, 10, 0, 32)
-    sliderBg.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-    Instance.new("UICorner", sliderBg).CornerRadius = UDim.new(1, 0)
-
-    local fill = Instance.new("Frame", sliderBg)
-    fill.Size = UDim2.new((defaultValue-minVal)/(maxVal-minVal), 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
-    Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
-
-    local knob = Instance.new("Frame", sliderBg)
-    knob.Size = UDim2.new(0, 14, 0, 14)
-    knob.Position = UDim2.new((defaultValue-minVal)/(maxVal-minVal), -7, 0.5, -7)
-    knob.BackgroundColor3 = Color3.new(1, 1, 1)
-    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
-
-    local dragging = false
-    local value = defaultValue
-
-    local function updateSlider(inp)
-        local mousePos = UserInputService:GetMouseLocation()
-        local sliderX = sliderBg.AbsolutePosition.X
-        local rel = math.clamp(mousePos.X - sliderX, 0, sliderBg.AbsoluteSize.X)
-        local newVal = minVal + (rel / sliderBg.AbsoluteSize.X) * (maxVal - minVal)
-        newVal = math.floor(newVal * 10) / 10
-        value = newVal
-        
-        TweenService:Create(fill, TweenInfo.new(0.1), {Size = UDim2.new((value-minVal)/(maxVal-minVal), 0, 1, 0)}):Play()
-        TweenService:Create(knob, TweenInfo.new(0.1), {Position = UDim2.new((value-minVal)/(maxVal-minVal), -7, 0.5, -7)}):Play()
-        
-        labelObj.Text = label .. ": " .. value
-        onChange(value)
-    end
-
-    local inputTrigger = Instance.new("TextButton", container)
-    inputTrigger.Size = UDim2.new(1, 0, 1, 0)
-    inputTrigger.BackgroundTransparency = 1
-    inputTrigger.Text = ""
-
-    inputTrigger.MouseButton1Down:Connect(function() 
-        dragging = true 
-        updateSlider({UserInputType = Enum.UserInputType.MouseMovement})
-    end)
-    UserInputService.InputEnded:Connect(function(inp)
-        if inp.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-    end)
-    UserInputService.InputChanged:Connect(function(inp)
-        if dragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
-            updateSlider(inp)
-        end
-    end)
-    
-    container.MouseEnter:Connect(function()
-        TweenService:Create(stroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(0, 170, 255)}):Play()
-    end)
-    container.MouseLeave:Connect(function()
-        TweenService:Create(stroke, TweenInfo.new(0.2), {Color = Color3.fromRGB(50, 50, 60)}):Play()
-    end)
-
-    return labelObj
 end
 
 local boxLines = {}
@@ -782,295 +656,172 @@ local function toggleAntiAfk()
     end
 end
 
-local function setupTracers()
-    local cp = workspace:FindFirstChild("CosmeticProjectiles")
-    if cp then
-        cp.ChildAdded:Connect(function(child)
-            if scriptUnloaded or not tracerEnabled then return end
-            if not child:IsA("BasePart") then return end
-            task.wait()
-            local char = LocalPlayer.Character
-            if char and char:FindFirstChild("Head") then
-                if (child.Position - char.Head.Position).Magnitude < 15 then
-                    local att0 = Instance.new("Attachment", child)
-                    att0.Position = Vector3.new(0, 0, -0.5)
-                    local att1 = Instance.new("Attachment", child)
-                    att1.Position = Vector3.new(0, 0, 0.5)
-                    local trail = Instance.new("Trail", child)
-                    trail.Attachment0 = att0
-                    trail.Attachment1 = att1
-                    trail.Color = ColorSequence.new(Color3.new(1, 0.2, 0.2))
-                    trail.FaceCamera = true
-                    trail.Lifetime = 0.5
-                    trail.MinLength = 0
-                    trail.WidthScale = NumberSequence.new(0.3, 0)
-                end
-            end
-        end)
-    end
-end
-task.spawn(setupTracers)
-
 updateFOVCircle()
 
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local Window = Rayfield:CreateWindow({
-   Name = "NMZ Hub",
-   LoadingTitle = "NMZ",
-   LoadingSubtitle = "by NMZ Team",
-   ConfigurationSaving = { Enabled = false },
-   Discord = { Enabled = false },
-   KeySystem = false,
+local scriptId = "NMZ_ENTRENCHED_UI"
+local getGenv = getgenv or function() return _G end
+
+if getGenv()[scriptId] then
+    pcall(getGenv()[scriptId])
+end
+
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hplayfree25/luaLibrary/refs/heads/master/Init.lua?t=" .. tick()))()
+
+local Window = UI.CreateWindow({
+    Title = "NMZ Hub",
+    ToggleText = "NMZ",
+    Size = UDim2.new(0, 500, 0, 320)
 })
 
-local TabESP = Window:CreateTab("ESP", nil)
-local TabAim = Window:CreateTab("Aimbot", nil)
-local TabSilent = Window:CreateTab("Silent Aim", nil)
-local TabGun = Window:CreateTab("Gun Mods", nil)
-local TabHitbox = Window:CreateTab("Hitbox", nil)
-local TabMisc = Window:CreateTab("Misc", nil)
+getGenv()[scriptId] = function()
+    scriptUnloaded = true
+    scriptUnloadedLocal = true
+    if Window then Window.destroy() end
+    if fovCircle then fovCircle:Remove() fovCircle = nil end
+    if predDot then predDot:Remove() predDot = nil end
+    removeAllHighlights()
+    removeAllBoxes()
+    restoreAllHitboxes()
+    if antiAfkConnection then antiAfkConnection:Disconnect(); antiAfkConnection = nil end
+    if recoilThread then coroutine.close(recoilThread); recoilThread = nil end
+    if reloadConn then reloadConn:Disconnect(); reloadConn = nil end
+    getGenv()[scriptId] = nil
+end
 
-TabESP:CreateToggle({
-    Name = "ESP Toggle",
-    CurrentValue = espEnabled,
-    Callback = function(Value)
-        espEnabled = Value
-        refreshESP()
-    end
-})
-TabESP:CreateDropdown({
-    Name = "ESP Mode",
-    Options = {"Highlight", "Box"},
-    CurrentOption = espMode,
-    Callback = function(Option)
-        espMode = Option[1] or Option
-        refreshESP()
-    end
-})
-TabESP:CreateDropdown({
-    Name = "ESP Color",
-    Options = boxColorNames,
-    CurrentOption = "White",
-    Callback = function(Option)
-        local opt = Option[1] or Option
-        for i, n in ipairs(boxColorNames) do
-            if n == opt then
-                boxColorIndex = i
-                boxColor = boxColors[i]
-                for plr, lines in pairs(boxLines) do for _, l in pairs(lines) do l.Color = boxColor end end
-                break
-            end
+local TabESP = UI.CreateTab(Window, "ESP", 1)
+local TabAim = UI.CreateTab(Window, "AIMBOT", 2)
+local TabSilent = UI.CreateTab(Window, "SILENT AIM", 3)
+local TabGun = UI.CreateTab(Window, "GUN MODS", 4)
+local TabHitbox = UI.CreateTab(Window, "HITBOX", 5)
+local TabMisc = UI.CreateTab(Window, "MISC", 6)
+
+UI.CreateToggle(TabESP, "ESP Toggle", espEnabled, function(Value)
+    espEnabled = Value
+    refreshESP()
+end)
+UI.CreateDropdown(TabESP, "ESP Mode", {{name="Highlight",val="Highlight"},{name="Box",val="Box"}}, 1, function(Option)
+    espMode = Option
+    refreshESP()
+end)
+
+local colOpts = {}
+for i, name in ipairs(boxColorNames) do table.insert(colOpts, {name=name, val=name}) end
+UI.CreateDropdown(TabESP, "ESP Color", colOpts, 1, function(Option)
+    for i, n in ipairs(boxColorNames) do
+        if n == Option then
+            boxColorIndex = i
+            boxColor = boxColors[i]
+            for plr, lines in pairs(boxLines) do for _, l in pairs(lines) do l.Color = boxColor end end
+            break
         end
     end
-})
+end)
 
-TabAim:CreateToggle({
-    Name = "Aimbot Toggle",
-    CurrentValue = aimEnabled,
-    Callback = function(Value)
-        aimEnabled = Value
-        updateFOVCircle()
-    end
-})
-TabAim:CreateDropdown({
-    Name = "Target Part",
-    Options = {"Head", "HumanoidRootPart"},
-    CurrentOption = aimPart,
-    Callback = function(Option)
-        aimPart = Option[1] or Option
-    end
-})
-TabAim:CreateDropdown({
-    Name = "Aim Mode",
-    Options = {"Camera", "Mouse"},
-    CurrentOption = aimModePC,
-    Callback = function(Option)
-        aimModePC = Option[1] or Option
-    end
-})
-TabAim:CreateSlider({
-    Name = "Smoothness",
-    Range = {0.1, 1},
-    Increment = 0.1,
-    CurrentValue = smoothness,
-    Callback = function(Value)
-        smoothness = Value
-    end
-})
-TabAim:CreateSlider({
-    Name = "FOV Size",
-    Range = {50, 500},
-    Increment = 10,
-    CurrentValue = fovSize,
-    Callback = function(Value)
-        fovSize = Value
-        updateFOVCircle()
-    end
-})
+UI.CreateToggle(TabAim, "Aimbot Toggle", aimEnabled, function(Value)
+    aimEnabled = Value
+    updateFOVCircle()
+end)
+UI.CreateDropdown(TabAim, "Target Part", {{name="Head",val="Head"},{name="HumanoidRootPart",val="HumanoidRootPart"}}, 1, function(Option)
+    aimPart = Option
+end)
+UI.CreateDropdown(TabAim, "Aim Mode", {{name="Camera",val="Camera"},{name="Mouse",val="Mouse"}}, 1, function(Option)
+    aimModePC = Option
+end)
+UI.CreateSlider(TabAim, "Smoothness", 0.1, 1, smoothness, function(v) return string.format("%.2f", v) end, function(Value)
+    smoothness = Value
+end)
+UI.CreateSlider(TabAim, "FOV Size", 50, 500, fovSize, function(v) return tostring(math.floor(v)) end, function(Value)
+    fovSize = Value
+    updateFOVCircle()
+end)
 
-TabSilent:CreateToggle({
-    Name = "Silent Aim Toggle",
-    CurrentValue = silentAimEnabled,
-    Callback = function(Value)
-        silentAimEnabled = Value
-    end
-})
-TabSilent:CreateSlider({
-    Name = "Silent Max Distance",
-    Range = {100, 3000},
-    Increment = 50,
-    CurrentValue = silentAimDistance,
-    Callback = function(Value)
-        silentAimDistance = Value
-    end
-})
-TabSilent:CreateToggle({
-    Name = "Predict Toggle",
-    CurrentValue = predEnabled,
-    Callback = function(Value)
-        predEnabled = Value
-    end
-})
-TabSilent:CreateSlider({
-    Name = "Predict Strength",
-    Range = {0, 0.3},
-    Increment = 0.01,
-    CurrentValue = predStrength,
-    Callback = function(Value)
-        predStrength = Value
-    end
-})
-TabSilent:CreateToggle({
-    Name = "Triggerbot",
-    CurrentValue = triggerbotEnabled,
-    Callback = function(Value)
-        triggerbotEnabled = Value
-    end
-})
-TabSilent:CreateToggle({
-    Name = "Wall Check",
-    CurrentValue = wallCheckEnabled,
-    Callback = function(Value)
-        wallCheckEnabled = Value
-    end
-})
+UI.CreateToggle(TabSilent, "Silent Aim Toggle", silentAimEnabled, function(Value)
+    silentAimEnabled = Value
+end)
+UI.CreateSlider(TabSilent, "Silent Max Distance", 100, 3000, silentAimDistance, function(v) return tostring(math.floor(v)) end, function(Value)
+    silentAimDistance = Value
+end)
+UI.CreateToggle(TabSilent, "Predict Toggle", predEnabled, function(Value)
+    predEnabled = Value
+end)
+UI.CreateSlider(TabSilent, "Predict Strength", 0, 0.3, predStrength, function(v) return string.format("%.3f", v) end, function(Value)
+    predStrength = Value
+end)
+UI.CreateToggle(TabSilent, "Triggerbot", triggerbotEnabled, function(Value)
+    triggerbotEnabled = Value
+end)
+UI.CreateToggle(TabSilent, "Wall Check", wallCheckEnabled, function(Value)
+    wallCheckEnabled = Value
+end)
 
-TabGun:CreateToggle({
-    Name = "No Recoil",
-    CurrentValue = noRecoilEnabled,
-    Callback = function(Value)
-        noRecoilEnabled = Value
-    end
-})
-TabGun:CreateToggle({
-    Name = "No Spread",
-    CurrentValue = noSpreadEnabled,
-    Callback = function(Value)
-        noSpreadEnabled = Value
-    end
-})
-TabGun:CreateToggle({
-    Name = "Fast Bolt",
-    CurrentValue = fastBoltEnabled,
-    Callback = function(Value)
-        fastBoltEnabled = Value
-    end
-})
+UI.CreateToggle(TabGun, "No Recoil", noRecoilEnabled, function(Value)
+    noRecoilEnabled = Value
+end)
+UI.CreateToggle(TabGun, "No Spread", noSpreadEnabled, function(Value)
+    noSpreadEnabled = Value
+end)
+UI.CreateToggle(TabGun, "Fast Bolt", fastBoltEnabled, function(Value)
+    fastBoltEnabled = Value
+end)
 
-TabHitbox:CreateToggle({
-    Name = "Hitbox Expander",
-    CurrentValue = hitboxEnabled,
-    Callback = function(Value)
-        hitboxEnabled = Value
-        if hitboxEnabled then applyHitboxToAll() else restoreAllHitboxes() end
-    end
-})
-TabHitbox:CreateSlider({
-    Name = "Hitbox Multiplier",
-    Range = {1, 5},
-    Increment = 0.1,
-    CurrentValue = hitboxMultiplier,
-    Callback = function(Value)
-        hitboxMultiplier = Value
-        if hitboxEnabled then applyHitboxToAll() end
-    end
-})
+UI.CreateToggle(TabHitbox, "Hitbox Expander", hitboxEnabled, function(Value)
+    hitboxEnabled = Value
+    if hitboxEnabled then applyHitboxToAll() else restoreAllHitboxes() end
+end)
+UI.CreateSlider(TabHitbox, "Hitbox Multiplier", 1, 5, hitboxMultiplier, function(v) return string.format("%.1f", v) end, function(Value)
+    hitboxMultiplier = Value
+    if hitboxEnabled then applyHitboxToAll() end
+end)
 
-TabMisc:CreateToggle({
-    Name = "Anti-AFK",
-    CurrentValue = antiAfkEnabled,
-    Callback = function(Value)
-        antiAfkEnabled = Value
-        toggleAntiAfk()
-    end
-})
-TabMisc:CreateButton({
-    Name = "Rejoin",
-    Callback = function()
-        TeleportService:Teleport(game.PlaceId, LocalPlayer)
-    end
-})
-TabMisc:CreateButton({
-    Name = "Server Hop",
-    Callback = function()
-        local servers = {}
-        local success, res = pcall(function() return cloneref(game:GetService("HttpService")):JSONDecode(game:HttpGetAsync("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100")) end)
-        if success and res.data then
-            for _, s in pairs(res.data) do
-                if s.playing < s.maxPlayers and s.id ~= game.JobId then table.insert(servers, s.id) end
-            end
-            if #servers > 0 then TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[math.random(1,#servers)]) end
+UI.CreateToggle(TabMisc, "Anti-AFK", antiAfkEnabled, function(Value)
+    antiAfkEnabled = Value
+    toggleAntiAfk()
+end)
+UI.CreateButton(TabMisc, "Rejoin", function()
+    TeleportService:Teleport(game.PlaceId, LocalPlayer)
+end)
+UI.CreateButton(TabMisc, "Server Hop", function()
+    local servers = {}
+    local success, res = pcall(function() return cloneref(game:GetService("HttpService")):JSONDecode(game:HttpGetAsync("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100")) end)
+    if success and res.data then
+        for _, s in pairs(res.data) do
+            if s.playing < s.maxPlayers and s.id ~= game.JobId then table.insert(servers, s.id) end
         end
+        if #servers > 0 then TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[math.random(1,#servers)]) end
     end
-})
-TabMisc:CreateButton({
-    Name = "Boost FPS (Smooth)",
-    Callback = function()
-        if boostFpsEnabled then return end
-        boostFpsEnabled = true
-        pcall(function()
-            local Lighting = game:GetService("Lighting")
-            Lighting.GlobalShadows = false
-            Lighting.FogEnd = 9e9
-            Lighting.ShadowSoftness = 0
-            if sethiddenproperty then
-                pcall(sethiddenproperty, Lighting, "Technology", 2)
+end)
+UI.CreateButton(TabMisc, "Boost FPS (Smooth)", function()
+    if boostFpsEnabled then return end
+    boostFpsEnabled = true
+    pcall(function()
+        local Lighting = game:GetService("Lighting")
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 9e9
+        Lighting.ShadowSoftness = 0
+        if sethiddenproperty then
+            pcall(sethiddenproperty, Lighting, "Technology", 2)
+        end
+        for _, v in pairs(workspace:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Material = Enum.Material.SmoothPlastic
+                v.Reflectance = 0
+                v.CastShadow = false
+            elseif v:IsA("Decal") or v:IsA("Texture") then
+                v.Transparency = 1
+            elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                v.Lifetime = NumberRange.new(0)
             end
-            for _, v in pairs(workspace:GetDescendants()) do
-                if v:IsA("BasePart") then
-                    v.Material = Enum.Material.SmoothPlastic
-                    v.Reflectance = 0
-                    v.CastShadow = false
-                elseif v:IsA("Decal") or v:IsA("Texture") then
-                    v.Transparency = 1
-                elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
-                    v.Lifetime = NumberRange.new(0)
-                end
-            end
-            local Terrain = game:GetService("Workspace").Terrain
-            Terrain.WaterWaveSize = 0
-            Terrain.WaterWaveSpeed = 0
-            Terrain.WaterReflectance = 0
-            Terrain.WaterTransparency = 0
-        end)
-    end
-})
-TabMisc:CreateButton({
-    Name = "Unload Script",
-    Callback = function()
-        scriptUnloaded = true
-        scriptUnloadedLocal = true
-        Rayfield:Destroy()
-        if fovCircle then fovCircle:Remove() fovCircle = nil end
-        if predDot then predDot:Remove() predDot = nil end
-        removeAllHighlights()
-        removeAllBoxes()
-        restoreAllHitboxes()
-        if antiAfkConnection then antiAfkConnection:Disconnect(); antiAfkConnection = nil end
-        if recoilThread then coroutine.close(recoilThread); recoilThread = nil end
-        if reloadConn then reloadConn:Disconnect(); reloadConn = nil end
-    end
-})
+        end
+        local Terrain = game:GetService("Workspace").Terrain
+        Terrain.WaterWaveSize = 0
+        Terrain.WaterWaveSpeed = 0
+        Terrain.WaterReflectance = 0
+        Terrain.WaterTransparency = 0
+    end)
+end)
+UI.CreateButton(TabMisc, "Unload Script", function()
+    if getGenv()[scriptId] then getGenv()[scriptId]() end
+end)
 
 refreshESP()
 
@@ -1141,4 +892,4 @@ if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
     end)
 end
 
-print("MNZ ENTRENCHED WW1")
+print("MNZ ENTRENCHED WW1 - SCC UI LOADED")
