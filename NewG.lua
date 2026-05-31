@@ -107,6 +107,8 @@ if success and wm and type(wm) == "table" then
                                     data.Tool:SetAttribute("SpreadDefault", 0)
                                     data.Tool:SetAttribute("MinSpread", 0)
                                     data.Tool:SetAttribute("MaxSpread", 0)
+                                    local b = data.Tool:FindFirstChild("Bloom")
+                                    if b then b:Destroy() end
                                 end
                                 if fastBoltEnabled then
                                     pcall(function()
@@ -764,6 +766,8 @@ UI.CreateToggle(TabGun, "Fast Bolt", fastBoltEnabled, function(Value)
     fastBoltEnabled = Value
 end)
 
+
+
 UI.CreateToggle(TabHitbox, "Hitbox Expander", hitboxEnabled, function(Value)
     hitboxEnabled = Value
     if hitboxEnabled then applyHitboxToAll() else restoreAllHitboxes() end
@@ -874,8 +878,7 @@ if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
                                             
                                             if tVal then
                                                 local prediction = pos + tVel * tVal
-                                                local spread = currentTool:GetAttribute("SpreadDefault") or 0
-                                                return prediction + (prediction - LocalPlayer.Character.Head.Position).Unit * spread * 0.1
+                                                return prediction
                                             end
                                         end
                                         return pos
@@ -883,6 +886,31 @@ if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
                                 end)
                                 if ok and res then return res end
                             end
+                            
+                            if noSpreadEnabled then
+                                local ok, res = pcall(function()
+                                    local mouse = LocalPlayer:GetMouse()
+                                    local rayParams = RaycastParams.new()
+                                    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                                    if LocalPlayer.Character then
+                                        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, workspace.CurrentCamera}
+                                    else
+                                        rayParams.FilterDescendantsInstances = {workspace.CurrentCamera}
+                                    end
+                                    
+                                    local cam = workspace.CurrentCamera
+                                    local ray = cam:ScreenPointToRay(mouse.X, mouse.Y)
+                                    local hit = workspace:Raycast(ray.Origin, ray.Direction * 3000, rayParams)
+                                    
+                                    if hit then
+                                        return hit.Position
+                                    else
+                                        return ray.Origin + ray.Direction * 3000
+                                    end
+                                end)
+                                if ok and res then return res end
+                            end
+                            
                             return oldShootFn(...)
                         end)))
                     end
