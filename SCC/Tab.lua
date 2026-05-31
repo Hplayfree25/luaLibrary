@@ -90,7 +90,7 @@ function Tab.switch(window, tabName)
                 tab.container.Visible = true
                 -- Subtle fade-in slide animation
                 tab.container.Position = UDim2.new(0, 15, 0, 16)
-                Utils.tween(tab.container, TweenInfo.new(0.25, Enum.EasingStyle.OutQuad), {
+                Utils.tween(tab.container, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
                     Position = UDim2.new(0, 15, 0, 10)
                 })
             elseif not isSelected then

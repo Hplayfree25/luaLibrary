@@ -104,7 +104,7 @@ function Window.new(options)
                     local initialSize = UDim2.new(windowSize.X.Scale, windowSize.X.Offset - 16, windowSize.Y.Scale, windowSize.Y.Offset - 16)
                     frmMain.Size = initialSize
                     frmMain.BackgroundTransparency = 0.5
-                    Utils.tween(frmMain, TweenInfo.new(0.25, Enum.EasingStyle.OutQuad), {
+                    Utils.tween(frmMain, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
                         Size = targetSize,
                         BackgroundTransparency = Theme.BackgroundTransparency
                     })

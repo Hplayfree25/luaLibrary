@@ -5,7 +5,7 @@ if getGenv()[scriptId] then
     pcall(getGenv()[scriptId])
 end
 
-local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hplayfree25/luaLibrary/refs/heads/master/Init.lua"))()
+local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hplayfree25/luaLibrary/refs/heads/master/Init.lua?t=" .. tick()))()
 
 local Window = UI.CreateWindow({
     Title = "Universal UI Test",

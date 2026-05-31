@@ -227,7 +227,7 @@ _modules["Window"] = (function()
                         local initialSize = UDim2.new(windowSize.X.Scale, windowSize.X.Offset - 16, windowSize.Y.Scale, windowSize.Y.Offset - 16)
                         frmMain.Size = initialSize
                         frmMain.BackgroundTransparency = 0.5
-                        Utils.tween(frmMain, TweenInfo.new(0.25, Enum.EasingStyle.OutQuad), {
+                        Utils.tween(frmMain, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
                             Size = targetSize,
                             BackgroundTransparency = Theme.BackgroundTransparency
                         })
@@ -402,7 +402,7 @@ _modules["Tab"] = (function()
                     tab.container.Visible = true
                     -- Subtle fade-in slide animation
                     tab.container.Position = UDim2.new(0, 15, 0, 16)
-                    Utils.tween(tab.container, TweenInfo.new(0.25, Enum.EasingStyle.OutQuad), {
+                    Utils.tween(tab.container, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
                         Position = UDim2.new(0, 15, 0, 10)
                     })
                 elseif not isSelected then
