@@ -1,0 +1,9 @@
+# Local bundler utilities
+bundle.py
+bundle.bat
+
+# Standard temp and IDE files
+.DS_Store
+*.log
+.idea/
+.vscode/
