@@ -8,7 +8,7 @@ A collection of high-performance Lua scripts designed for environment diagnostic
 
 This repository contains two core components:
 
-1. **NewG.lua**: An optimized, feature-rich script providing advanced client-side features, including a custom user interface, aim assistance, sensory perception (ESP) overlays, hitbox adjustments, and weapon behavior modifiers.
+1. **NewG.lua**: entrenched ww1
 2. **exec_test.lua**: A spoof-resistant diagnostic tool that comprehensively measures Unified Naming Convention (UNC) coverage and verifies environment integrity using actual function execution tests rather than simple global existence checks.
 
 ---
