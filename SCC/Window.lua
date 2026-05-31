@@ -141,12 +141,13 @@ function Window.new(options)
     tl1.Padding = UDim.new(0, 6)
     tl1.Parent = tabCont
 
-    -- Intro Screen (Advanced Animation)
+    -- Loading Card Intro - initially hidden
     local introFrame = Instance.new("Frame")
     introFrame.Size = UDim2.new(0, 220, 0, 80)
     introFrame.Position = UDim2.new(0.5, -110, 0.5, -40)
     introFrame.BackgroundColor3 = Theme.Background
-    introFrame.BackgroundTransparency = Theme.BackgroundTransparency
+    introFrame.BackgroundTransparency = 1
+    introFrame.Visible = false
     introFrame.Parent = gui
 
     local introCorner = Instance.new("UICorner")
@@ -155,7 +156,7 @@ function Window.new(options)
 
     local introStroke = Instance.new("UIStroke")
     introStroke.Color = Theme.Stroke
-    introStroke.Transparency = Theme.StrokeTransparency
+    introStroke.Transparency = 1
     introStroke.Parent = introFrame
 
     local introTitle = Instance.new("TextLabel")
@@ -166,12 +167,14 @@ function Window.new(options)
     introTitle.TextColor3 = Theme.TextPrimary
     introTitle.Font = Theme.FontBold
     introTitle.TextSize = 13
+    introTitle.TextTransparency = 1
     introTitle.Parent = introFrame
 
     local introBarBg = Instance.new("Frame")
     introBarBg.Size = UDim2.new(0.8, 0, 0, 4)
     introBarBg.Position = UDim2.new(0.1, 0, 0.7, 0)
     introBarBg.BackgroundColor3 = Theme.SecondaryBackground
+    introBarBg.BackgroundTransparency = 1
     introBarBg.Parent = introFrame
 
     local introBarCorner = Instance.new("UICorner")
@@ -210,6 +213,80 @@ function Window.new(options)
     -- Run intro animations in separate thread
     task.spawn(function()
         task.wait(0.2)
+
+        -- ==========================================
+        -- ADVANCED BRAND INTRO ("NMZUI") - No Box, No BG
+        -- ==========================================
+        local brandContainer = Instance.new("Frame")
+        brandContainer.Size = UDim2.new(1, 0, 1, 0)
+        brandContainer.BackgroundTransparency = 1
+        brandContainer.Parent = gui
+
+        local letters = {"N", "M", "Z", "U", "I"}
+        local labels = {}
+        
+        -- Spacing offsets for font size 42 centered
+        local offsets = {
+            N = -65,
+            M = -31,
+            Z = 5,
+            U = 35,
+            I = 61
+        }
+
+        for _, char in ipairs(letters) do
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(0, 40, 0, 50)
+            lbl.Position = UDim2.new(0.5, -20, 0.5, -25) -- Start overlapping at exact center
+            lbl.BackgroundTransparency = 1
+            lbl.Text = char
+            lbl.Font = Theme.FontBold
+            lbl.TextSize = 42
+            lbl.TextColor3 = Theme.TextPrimary
+            lbl.TextTransparency = 1
+            lbl.Parent = brandContainer
+            labels[char] = lbl
+        end
+
+        -- 1. Fade in 'N' at the center
+        Utils.tween(labels["N"], TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            TextTransparency = 0
+        })
+        task.wait(0.5)
+
+        -- 2. Expand dynamically from center to full "NMZUI" word
+        local expandInfo = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+        for _, char in ipairs(letters) do
+            Utils.tween(labels[char], expandInfo, {
+                Position = UDim2.new(0.5, offsets[char], 0.5, -25),
+                TextTransparency = 0
+            })
+        end
+        task.wait(0.9)
+
+        -- 3. Collapse back to center and fade out completely
+        local collapseInfo = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+        for _, char in ipairs(letters) do
+            Utils.tween(labels[char], collapseInfo, {
+                Position = UDim2.new(0.5, -20, 0.5, -25),
+                TextTransparency = 1
+            })
+        end
+        task.wait(0.45)
+        brandContainer:Destroy()
+
+        -- ==========================================
+        -- SECOND INTRO: LOADING CARD WITH PROGRESS BAR
+        -- ==========================================
+        task.wait(0.1)
+        introFrame.Visible = true
+        Utils.tween(introFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = Theme.BackgroundTransparency})
+        Utils.tween(introStroke, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = Theme.StrokeTransparency})
+        Utils.tween(introTitle, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
+        Utils.tween(introBarBg, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0})
+
+        task.wait(0.15)
+        
         -- Smooth progress bar loading
         local barTween = Utils.tween(introBarFill, TweenInfo.new(1.0, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             Size = UDim2.new(1, 0, 1, 0)
@@ -217,7 +294,7 @@ function Window.new(options)
         barTween.Completed:Wait()
         task.wait(0.15)
 
-        -- Fade out Intro Frame
+        -- Fade out Loading Card Frame
         Utils.tween(introFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             Size = UDim2.new(0, 200, 0, 60),
             Position = UDim2.new(0.5, -100, 0.5, -30),
