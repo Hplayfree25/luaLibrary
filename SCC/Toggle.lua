@@ -13,7 +13,7 @@ function Toggle.new(parent, name, defaultState, cb)
     local stateVal = defaultState or false
     
     local frm = Instance.new("Frame")
-    frm.Size = UDim2.new(1, 0, 0, 40)
+    frm.Size = UDim2.new(1, 0, 0, 36)
     frm.BackgroundColor3 = Theme.PanelBackground
     frm.BackgroundTransparency = Theme.PanelTransparency
     frm.Parent = parent
@@ -24,6 +24,7 @@ function Toggle.new(parent, name, defaultState, cb)
     s.Color = Theme.Stroke
     s.Transparency = Theme.PanelStrokeTransparency
     s.Parent = frm
+    
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(0.7, 0, 1, 0)
     lbl.Position = UDim2.new(0, 12, 0, 0)
@@ -31,12 +32,13 @@ function Toggle.new(parent, name, defaultState, cb)
     lbl.Text = name
     lbl.TextColor3 = Theme.TextSecondary
     lbl.Font = Theme.FontMedium
-    lbl.TextSize = 13
+    lbl.TextSize = 12
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Parent = frm
+    
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 40, 0, 20)
-    btn.Position = UDim2.new(1, -52, 0.5, -10)
+    btn.Size = UDim2.new(0, 34, 0, 18)
+    btn.Position = UDim2.new(1, -46, 0.5, -9)
     btn.BackgroundColor3 = stateVal and Theme.Accent or Theme.SecondaryBackground
     btn.Text = ""
     btn.AutoButtonColor = false
@@ -44,9 +46,10 @@ function Toggle.new(parent, name, defaultState, cb)
     local bc = Instance.new("UICorner")
     bc.CornerRadius = UDim.new(1, 0)
     bc.Parent = btn
+    
     local knob = Instance.new("Frame")
-    knob.Size = UDim2.new(0, 16, 0, 16)
-    knob.Position = stateVal and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = stateVal and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
     knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     knob.Parent = btn
     local kc = Instance.new("UICorner")
@@ -54,10 +57,20 @@ function Toggle.new(parent, name, defaultState, cb)
     kc.Parent = knob
     
     local function updateVisuals()
-        local ti = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        local ti = TweenInfo.new(0.2, Enum.EasingStyle.Sine)
         Utils.tween(btn, ti, {BackgroundColor3 = stateVal and Theme.Accent or Theme.SecondaryBackground})
-        Utils.tween(knob, ti, {Position = stateVal and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)})
+        Utils.tween(knob, ti, {Position = stateVal and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)})
     end
+    
+    -- Smooth hover transition
+    frm.MouseEnter:Connect(function()
+        Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.SecondaryBackground})
+        Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+    end)
+    frm.MouseLeave:Connect(function()
+        Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.PanelBackground})
+        Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+    end)
     
     btn.MouseButton1Click:Connect(function()
         stateVal = not stateVal

@@ -19,7 +19,7 @@ function Window.new(options)
     local Theme = options.Theme or DefaultTheme
     local titleText = options.Title or "Universal UI"
     local toggleText = options.ToggleText or "UI"
-    local windowSize = options.Size or UDim2.new(0, 500, 0, 300)
+    local windowSize = options.Size or UDim2.new(0, 600, 0, 380)
     
     local gui = Instance.new("ScreenGui")
     gui.Name = options.GuiName or "UniversalUILib"
@@ -27,11 +27,12 @@ function Window.new(options)
     gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     gui.Parent = Utils.getSafeGui()
 
+    -- Floating toggle button (Premium Dark Slate Style)
     local btnTgl = Instance.new("TextButton")
-    btnTgl.Size = UDim2.new(0, 50, 0, 50)
-    btnTgl.Position = UDim2.new(1, -70, 0.5, -25)
-    btnTgl.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-    btnTgl.BackgroundTransparency = Theme.BackgroundTransparency
+    btnTgl.Size = UDim2.new(0, 48, 0, 48)
+    btnTgl.Position = UDim2.new(1, -70, 0.5, -24)
+    btnTgl.BackgroundColor3 = Theme.PanelBackground
+    btnTgl.BackgroundTransparency = 0.15
     btnTgl.Text = ""
     btnTgl.Active = true
     btnTgl.Parent = gui
@@ -42,7 +43,7 @@ function Window.new(options)
 
     local bs1 = Instance.new("UIStroke")
     bs1.Color = Theme.Stroke
-    bs1.Transparency = 0.8
+    bs1.Transparency = 0.90
     bs1.Thickness = 1
     bs1.Parent = btnTgl
 
@@ -51,30 +52,23 @@ function Window.new(options)
     lblTitleTgl.BackgroundTransparency = 1
     lblTitleTgl.Text = toggleText
     lblTitleTgl.Font = Theme.FontBold
-    lblTitleTgl.TextSize = 16
-    lblTitleTgl.TextColor3 = Theme.TextPrimary
+    lblTitleTgl.TextSize = 14
+    lblTitleTgl.TextColor3 = Theme.TextSecondary
     lblTitleTgl.Parent = btnTgl
-
-    local gradNmz = Instance.new("UIGradient")
-    gradNmz.Color = options.ToggleGradient or ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Theme.Accent),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 100, 255))
-    })
-    gradNmz.Parent = lblTitleTgl
-
-    local rs = Utils.safeSvc("RunService")
-    local gradSpin = 0
-    local rsConn
-    if options.SpinToggleGradient ~= false then
-        rsConn = rs.Heartbeat:Connect(function(dt)
-            gradSpin = gradSpin + (dt * 150)
-            if gradSpin > 360 then gradSpin = gradSpin - 360 end
-            gradNmz.Rotation = gradSpin
-        end)
-    end
+    
+    -- Smooth hover transition for floating toggle button
+    btnTgl.MouseEnter:Connect(function()
+        Utils.tween(btnTgl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.SecondaryBackground})
+        Utils.tween(lblTitleTgl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+    end)
+    btnTgl.MouseLeave:Connect(function()
+        Utils.tween(btnTgl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.PanelBackground})
+        Utils.tween(lblTitleTgl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+    end)
 
     Drag.makeDraggable(btnTgl)
 
+    -- Main UI Frame
     local frmMain = Instance.new("Frame")
     frmMain.Size = windowSize
     frmMain.Position = UDim2.new(0.5, -windowSize.X.Offset/2, 0.5, -windowSize.Y.Offset/2)
@@ -94,6 +88,7 @@ function Window.new(options)
     fs1.Thickness = 1
     fs1.Parent = frmMain
 
+    -- Toggle show/hide transition
     local clickTime = 0
     btnTgl.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -106,9 +101,13 @@ function Window.new(options)
                 frmMain.Visible = not frmMain.Visible
                 if frmMain.Visible then
                     local targetSize = windowSize
-                    local initialSize = UDim2.new(windowSize.X.Scale, windowSize.X.Offset - 20, windowSize.Y.Scale, windowSize.Y.Offset - 20)
+                    local initialSize = UDim2.new(windowSize.X.Scale, windowSize.X.Offset - 16, windowSize.Y.Scale, windowSize.Y.Offset - 16)
                     frmMain.Size = initialSize
-                    Utils.tween(frmMain, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = targetSize})
+                    frmMain.BackgroundTransparency = 0.5
+                    Utils.tween(frmMain, TweenInfo.new(0.25, Enum.EasingStyle.OutQuad), {
+                        Size = targetSize,
+                        BackgroundTransparency = Theme.BackgroundTransparency
+                    })
                 end
             end
         end
@@ -116,38 +115,42 @@ function Window.new(options)
 
     Drag.makeDraggable(frmMain)
 
+    -- Layout panels
     local leftPanel = Instance.new("Frame")
-    leftPanel.Size = UDim2.new(0, 140, 1, 0)
+    leftPanel.Size = UDim2.new(0, 155, 1, 0)
     leftPanel.Position = UDim2.new(0, 0, 0, 0)
     leftPanel.BackgroundTransparency = 1
     leftPanel.Parent = frmMain
 
     local rightPanel = Instance.new("Frame")
-    rightPanel.Size = UDim2.new(1, -140, 1, 0)
-    rightPanel.Position = UDim2.new(0, 140, 0, 0)
+    rightPanel.Size = UDim2.new(1, -155, 1, 0)
+    rightPanel.Position = UDim2.new(0, 155, 0, 0)
     rightPanel.BackgroundTransparency = 1
     rightPanel.Parent = frmMain
 
     local divider = Instance.new("Frame")
     divider.Size = UDim2.new(0, 1, 1, -20)
-    divider.Position = UDim2.new(0, 139, 0, 10)
+    divider.Position = UDim2.new(0, 154, 0, 10)
     divider.BackgroundColor3 = Theme.Stroke
     divider.BackgroundTransparency = Theme.StrokeTransparency
     divider.Parent = frmMain
 
+    -- Title (Clean Sleek Style)
     local lblTitle = Instance.new("TextLabel")
     lblTitle.Size = UDim2.new(1, 0, 0, 50)
-    lblTitle.Position = UDim2.new(0, 0, 0, 10)
+    lblTitle.Position = UDim2.new(0, 0, 0, 12)
     lblTitle.BackgroundTransparency = 1
     lblTitle.Text = titleText
     lblTitle.TextColor3 = Theme.TextPrimary
     lblTitle.Font = Theme.FontBold
-    lblTitle.TextSize = 18
+    lblTitle.TextSize = 16
     lblTitle.Parent = leftPanel
+    
+    -- Very subtle gray-to-white gradient for title
     local gradTitle = Instance.new("UIGradient")
-    gradTitle.Color = options.TitleGradient or ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Theme.Accent),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 100, 255))
+    gradTitle.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Theme.TextPrimary),
+        ColorSequenceKeypoint.new(1, Theme.TextSecondary)
     })
     gradTitle.Parent = lblTitle
 
@@ -161,7 +164,7 @@ function Window.new(options)
     tl1.FillDirection = Enum.FillDirection.Vertical
     tl1.HorizontalAlignment = Enum.HorizontalAlignment.Center
     tl1.SortOrder = Enum.SortOrder.LayoutOrder
-    tl1.Padding = UDim.new(0, 8)
+    tl1.Padding = UDim.new(0, 6)
     tl1.Parent = tabCont
     
     local self = {
@@ -170,10 +173,8 @@ function Window.new(options)
         leftPanel = leftPanel,
         rightPanel = rightPanel,
         tabContainer = tabCont,
-        rsConn = rsConn,
         theme = Theme,
         destroy = function()
-            if rsConn then rsConn:Disconnect() end
             gui:Destroy()
         end
     }

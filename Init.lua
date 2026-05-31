@@ -8,28 +8,28 @@ _modules["Theme"] = (function()
         FontBold = Enum.Font.GothamBold,
         FontMedium = Enum.Font.GothamMedium,
         
-        -- Colors
-        Background = Color3.fromRGB(12, 12, 16),
-        PanelBackground = Color3.fromRGB(25, 25, 30),
-        Accent = Color3.fromRGB(100, 150, 255),
-        AccentHover = Color3.fromRGB(120, 170, 255),
-        SecondaryBackground = Color3.fromRGB(40, 40, 45),
-        TabInactive = Color3.fromRGB(20, 20, 25),
-        TabActive = Color3.fromRGB(40, 40, 50),
-        TextPrimary = Color3.fromRGB(255, 255, 255),
-        TextSecondary = Color3.fromRGB(240, 240, 240),
-        TextMuted = Color3.fromRGB(150, 150, 150),
-        Stroke = Color3.fromRGB(255, 255, 255),
+        -- Colors (Refined Minimalist Dark)
+        Background = Color3.fromRGB(12, 12, 14),             -- Deep obsidian gray
+        PanelBackground = Color3.fromRGB(20, 20, 24),        -- Slate panel fill
+        Accent = Color3.fromRGB(70, 130, 200),               -- Premium muted steel blue
+        AccentHover = Color3.fromRGB(85, 145, 215),          -- Slate blue slightly brighter
+        SecondaryBackground = Color3.fromRGB(30, 30, 36),   -- Component container/knob color
+        TabInactive = Color3.fromRGB(16, 16, 20),
+        TabActive = Color3.fromRGB(28, 28, 34),
+        TextPrimary = Color3.fromRGB(255, 255, 255),         -- Pure white
+        TextSecondary = Color3.fromRGB(200, 200, 205),       -- Muted light gray
+        TextMuted = Color3.fromRGB(120, 120, 125),           -- Darker gray
+        Stroke = Color3.fromRGB(255, 255, 255),              -- Thin overlay white stroke
         
         -- Transparencies
-        BackgroundTransparency = 0.1,
-        PanelTransparency = 0.6,
-        StrokeTransparency = 0.85,
-        PanelStrokeTransparency = 0.92,
+        BackgroundTransparency = 0.05,
+        PanelTransparency = 0.4,
+        StrokeTransparency = 0.94,                           -- Extremely faint white lines
+        PanelStrokeTransparency = 0.96,                      -- Barely visible borders for premium feel
         
         -- Misc
-        CornerRadius = UDim.new(0, 8),
-        WindowCornerRadius = UDim.new(0, 12)
+        CornerRadius = UDim.new(0, 6),
+        WindowCornerRadius = UDim.new(0, 10)
     }
     
     return Theme
@@ -142,7 +142,7 @@ _modules["Window"] = (function()
         local Theme = options.Theme or DefaultTheme
         local titleText = options.Title or "Universal UI"
         local toggleText = options.ToggleText or "UI"
-        local windowSize = options.Size or UDim2.new(0, 500, 0, 300)
+        local windowSize = options.Size or UDim2.new(0, 600, 0, 380)
         
         local gui = Instance.new("ScreenGui")
         gui.Name = options.GuiName or "UniversalUILib"
@@ -150,11 +150,12 @@ _modules["Window"] = (function()
         gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         gui.Parent = Utils.getSafeGui()
     
+        -- Floating toggle button (Premium Dark Slate Style)
         local btnTgl = Instance.new("TextButton")
-        btnTgl.Size = UDim2.new(0, 50, 0, 50)
-        btnTgl.Position = UDim2.new(1, -70, 0.5, -25)
-        btnTgl.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
-        btnTgl.BackgroundTransparency = Theme.BackgroundTransparency
+        btnTgl.Size = UDim2.new(0, 48, 0, 48)
+        btnTgl.Position = UDim2.new(1, -70, 0.5, -24)
+        btnTgl.BackgroundColor3 = Theme.PanelBackground
+        btnTgl.BackgroundTransparency = 0.15
         btnTgl.Text = ""
         btnTgl.Active = true
         btnTgl.Parent = gui
@@ -165,7 +166,7 @@ _modules["Window"] = (function()
     
         local bs1 = Instance.new("UIStroke")
         bs1.Color = Theme.Stroke
-        bs1.Transparency = 0.8
+        bs1.Transparency = 0.90
         bs1.Thickness = 1
         bs1.Parent = btnTgl
     
@@ -174,30 +175,23 @@ _modules["Window"] = (function()
         lblTitleTgl.BackgroundTransparency = 1
         lblTitleTgl.Text = toggleText
         lblTitleTgl.Font = Theme.FontBold
-        lblTitleTgl.TextSize = 16
-        lblTitleTgl.TextColor3 = Theme.TextPrimary
+        lblTitleTgl.TextSize = 14
+        lblTitleTgl.TextColor3 = Theme.TextSecondary
         lblTitleTgl.Parent = btnTgl
-    
-        local gradNmz = Instance.new("UIGradient")
-        gradNmz.Color = options.ToggleGradient or ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Theme.Accent),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 100, 255))
-        })
-        gradNmz.Parent = lblTitleTgl
-    
-        local rs = Utils.safeSvc("RunService")
-        local gradSpin = 0
-        local rsConn
-        if options.SpinToggleGradient ~= false then
-            rsConn = rs.Heartbeat:Connect(function(dt)
-                gradSpin = gradSpin + (dt * 150)
-                if gradSpin > 360 then gradSpin = gradSpin - 360 end
-                gradNmz.Rotation = gradSpin
-            end)
-        end
+        
+        -- Smooth hover transition for floating toggle button
+        btnTgl.MouseEnter:Connect(function()
+            Utils.tween(btnTgl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.SecondaryBackground})
+            Utils.tween(lblTitleTgl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+        end)
+        btnTgl.MouseLeave:Connect(function()
+            Utils.tween(btnTgl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.PanelBackground})
+            Utils.tween(lblTitleTgl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+        end)
     
         Drag.makeDraggable(btnTgl)
     
+        -- Main UI Frame
         local frmMain = Instance.new("Frame")
         frmMain.Size = windowSize
         frmMain.Position = UDim2.new(0.5, -windowSize.X.Offset/2, 0.5, -windowSize.Y.Offset/2)
@@ -217,6 +211,7 @@ _modules["Window"] = (function()
         fs1.Thickness = 1
         fs1.Parent = frmMain
     
+        -- Toggle show/hide transition
         local clickTime = 0
         btnTgl.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -229,9 +224,13 @@ _modules["Window"] = (function()
                     frmMain.Visible = not frmMain.Visible
                     if frmMain.Visible then
                         local targetSize = windowSize
-                        local initialSize = UDim2.new(windowSize.X.Scale, windowSize.X.Offset - 20, windowSize.Y.Scale, windowSize.Y.Offset - 20)
+                        local initialSize = UDim2.new(windowSize.X.Scale, windowSize.X.Offset - 16, windowSize.Y.Scale, windowSize.Y.Offset - 16)
                         frmMain.Size = initialSize
-                        Utils.tween(frmMain, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = targetSize})
+                        frmMain.BackgroundTransparency = 0.5
+                        Utils.tween(frmMain, TweenInfo.new(0.25, Enum.EasingStyle.OutQuad), {
+                            Size = targetSize,
+                            BackgroundTransparency = Theme.BackgroundTransparency
+                        })
                     end
                 end
             end
@@ -239,38 +238,42 @@ _modules["Window"] = (function()
     
         Drag.makeDraggable(frmMain)
     
+        -- Layout panels
         local leftPanel = Instance.new("Frame")
-        leftPanel.Size = UDim2.new(0, 140, 1, 0)
+        leftPanel.Size = UDim2.new(0, 155, 1, 0)
         leftPanel.Position = UDim2.new(0, 0, 0, 0)
         leftPanel.BackgroundTransparency = 1
         leftPanel.Parent = frmMain
     
         local rightPanel = Instance.new("Frame")
-        rightPanel.Size = UDim2.new(1, -140, 1, 0)
-        rightPanel.Position = UDim2.new(0, 140, 0, 0)
+        rightPanel.Size = UDim2.new(1, -155, 1, 0)
+        rightPanel.Position = UDim2.new(0, 155, 0, 0)
         rightPanel.BackgroundTransparency = 1
         rightPanel.Parent = frmMain
     
         local divider = Instance.new("Frame")
         divider.Size = UDim2.new(0, 1, 1, -20)
-        divider.Position = UDim2.new(0, 139, 0, 10)
+        divider.Position = UDim2.new(0, 154, 0, 10)
         divider.BackgroundColor3 = Theme.Stroke
         divider.BackgroundTransparency = Theme.StrokeTransparency
         divider.Parent = frmMain
     
+        -- Title (Clean Sleek Style)
         local lblTitle = Instance.new("TextLabel")
         lblTitle.Size = UDim2.new(1, 0, 0, 50)
-        lblTitle.Position = UDim2.new(0, 0, 0, 10)
+        lblTitle.Position = UDim2.new(0, 0, 0, 12)
         lblTitle.BackgroundTransparency = 1
         lblTitle.Text = titleText
         lblTitle.TextColor3 = Theme.TextPrimary
         lblTitle.Font = Theme.FontBold
-        lblTitle.TextSize = 18
+        lblTitle.TextSize = 16
         lblTitle.Parent = leftPanel
+        
+        -- Very subtle gray-to-white gradient for title
         local gradTitle = Instance.new("UIGradient")
-        gradTitle.Color = options.TitleGradient or ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Theme.Accent),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(200, 100, 255))
+        gradTitle.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Theme.TextPrimary),
+            ColorSequenceKeypoint.new(1, Theme.TextSecondary)
         })
         gradTitle.Parent = lblTitle
     
@@ -284,7 +287,7 @@ _modules["Window"] = (function()
         tl1.FillDirection = Enum.FillDirection.Vertical
         tl1.HorizontalAlignment = Enum.HorizontalAlignment.Center
         tl1.SortOrder = Enum.SortOrder.LayoutOrder
-        tl1.Padding = UDim.new(0, 8)
+        tl1.Padding = UDim.new(0, 6)
         tl1.Parent = tabCont
         
         local self = {
@@ -293,10 +296,8 @@ _modules["Window"] = (function()
             leftPanel = leftPanel,
             rightPanel = rightPanel,
             tabContainer = tabCont,
-            rsConn = rsConn,
             theme = Theme,
             destroy = function()
-                if rsConn then rsConn:Disconnect() end
                 gui:Destroy()
             end
         }
@@ -322,12 +323,12 @@ _modules["Tab"] = (function()
     
     function Tab.new(window, name, order)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, -20, 0, 35)
+        btn.Size = UDim2.new(1, -20, 0, 32)
         btn.BackgroundColor3 = Theme.TabInactive
         btn.Text = name
         btn.TextColor3 = Theme.TextMuted
         btn.Font = Theme.FontBold
-        btn.TextSize = 13
+        btn.TextSize = 11
         btn.LayoutOrder = order or 1
         local c = Instance.new("UICorner")
         c.CornerRadius = Theme.CornerRadius
@@ -335,17 +336,18 @@ _modules["Tab"] = (function()
         btn.Parent = window.tabContainer
     
         local frm = Instance.new("ScrollingFrame")
-        frm.Size = UDim2.new(1, -15, 1, -20)
+        frm.Size = UDim2.new(1, -20, 1, -20)
         frm.Position = UDim2.new(0, 15, 0, 10)
         frm.BackgroundTransparency = 1
-        frm.ScrollBarThickness = 3
+        frm.ScrollBarThickness = 2
         frm.ScrollBarImageColor3 = Theme.Accent
+        frm.ScrollBarImageTransparency = 0.5
         frm.Visible = false
         frm.Parent = window.rightPanel
         
         local lay = Instance.new("UIListLayout")
         lay.SortOrder = Enum.SortOrder.LayoutOrder
-        lay.Padding = UDim.new(0, 8)
+        lay.Padding = UDim.new(0, 6)
         lay.HorizontalAlignment = Enum.HorizontalAlignment.Left
         lay.Parent = frm
         local pad = Instance.new("UIPadding")
@@ -358,6 +360,24 @@ _modules["Tab"] = (function()
             name = name,
             window = window
         }
+        
+        -- Smooth hover transition for Tab button
+        btn.MouseEnter:Connect(function()
+            if not (btn.BackgroundColor3 == Theme.TabActive) then
+                Utils.tween(btn, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+                    BackgroundColor3 = Theme.SecondaryBackground,
+                    TextColor3 = Theme.TextSecondary
+                })
+            end
+        end)
+        btn.MouseLeave:Connect(function()
+            if not (btn.BackgroundColor3 == Theme.TabActive) then
+                Utils.tween(btn, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+                    BackgroundColor3 = Theme.TabInactive,
+                    TextColor3 = Theme.TextMuted
+                })
+            end
+        end)
         
         btn.MouseButton1Click:Connect(function()
             Tab.switch(window, name)
@@ -374,11 +394,21 @@ _modules["Tab"] = (function()
     end
     
     function Tab.switch(window, tabName)
-        local ti = TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+        local ti = TweenInfo.new(0.2, Enum.EasingStyle.Sine)
         if window.tabs then
             for _, tab in ipairs(window.tabs) do
                 local isSelected = (tab.name == tabName)
-                tab.container.Visible = isSelected
+                if isSelected and not tab.container.Visible then
+                    tab.container.Visible = true
+                    -- Subtle fade-in slide animation
+                    tab.container.Position = UDim2.new(0, 15, 0, 16)
+                    Utils.tween(tab.container, TweenInfo.new(0.25, Enum.EasingStyle.OutQuad), {
+                        Position = UDim2.new(0, 15, 0, 10)
+                    })
+                elseif not isSelected then
+                    tab.container.Visible = false
+                end
+                
                 Utils.tween(tab.button, ti, {
                     BackgroundColor3 = isSelected and Theme.TabActive or Theme.TabInactive,
                     TextColor3 = isSelected and Theme.TextPrimary or Theme.TextMuted
@@ -405,31 +435,56 @@ _modules["Button"] = (function()
     
     function Button.new(parent, name, cb)
         local frm = Instance.new("Frame")
-        frm.Size = UDim2.new(1, 0, 0, 40)
+        frm.Size = UDim2.new(1, 0, 0, 36)
         frm.BackgroundColor3 = Theme.PanelBackground
         frm.BackgroundTransparency = Theme.PanelTransparency
         frm.Parent = parent
+        
         local c = Instance.new("UICorner")
         c.CornerRadius = Theme.CornerRadius
         c.Parent = frm
+        
         local s = Instance.new("UIStroke")
         s.Color = Theme.Stroke
         s.Transparency = Theme.PanelStrokeTransparency
         s.Parent = frm
+        
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, 0, 1, 0)
         btn.BackgroundTransparency = 1
         btn.Text = name
         btn.TextColor3 = Theme.TextSecondary
         btn.Font = Theme.FontMedium
-        btn.TextSize = 14
+        btn.TextSize = 12
         btn.Parent = frm
         
+        -- Smooth hover transition
+        btn.MouseEnter:Connect(function()
+            Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+                BackgroundColor3 = Theme.SecondaryBackground
+            })
+            Utils.tween(btn, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+                TextColor3 = Theme.TextPrimary
+            })
+        end)
+        btn.MouseLeave:Connect(function()
+            Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+                BackgroundColor3 = Theme.PanelBackground
+            })
+            Utils.tween(btn, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {
+                TextColor3 = Theme.TextSecondary
+            })
+        end)
+        
         btn.MouseButton1Click:Connect(function()
-            local ti = TweenInfo.new(0.1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+            local ti = TweenInfo.new(0.1, Enum.EasingStyle.Sine)
             Utils.tween(frm, ti, {BackgroundColor3 = Theme.Accent})
             task.delay(0.1, function()
-                pcall(function() Utils.tween(frm, ti, {BackgroundColor3 = Theme.PanelBackground}) end)
+                pcall(function() 
+                    Utils.tween(frm, ti, {
+                        BackgroundColor3 = (btn.Active and Theme.SecondaryBackground) or Theme.PanelBackground
+                    }) 
+                end)
             end)
             if cb then cb() end
         end)
@@ -461,7 +516,7 @@ _modules["Toggle"] = (function()
         local stateVal = defaultState or false
         
         local frm = Instance.new("Frame")
-        frm.Size = UDim2.new(1, 0, 0, 40)
+        frm.Size = UDim2.new(1, 0, 0, 36)
         frm.BackgroundColor3 = Theme.PanelBackground
         frm.BackgroundTransparency = Theme.PanelTransparency
         frm.Parent = parent
@@ -472,6 +527,7 @@ _modules["Toggle"] = (function()
         s.Color = Theme.Stroke
         s.Transparency = Theme.PanelStrokeTransparency
         s.Parent = frm
+        
         local lbl = Instance.new("TextLabel")
         lbl.Size = UDim2.new(0.7, 0, 1, 0)
         lbl.Position = UDim2.new(0, 12, 0, 0)
@@ -479,12 +535,13 @@ _modules["Toggle"] = (function()
         lbl.Text = name
         lbl.TextColor3 = Theme.TextSecondary
         lbl.Font = Theme.FontMedium
-        lbl.TextSize = 13
+        lbl.TextSize = 12
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.Parent = frm
+        
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 40, 0, 20)
-        btn.Position = UDim2.new(1, -52, 0.5, -10)
+        btn.Size = UDim2.new(0, 34, 0, 18)
+        btn.Position = UDim2.new(1, -46, 0.5, -9)
         btn.BackgroundColor3 = stateVal and Theme.Accent or Theme.SecondaryBackground
         btn.Text = ""
         btn.AutoButtonColor = false
@@ -492,9 +549,10 @@ _modules["Toggle"] = (function()
         local bc = Instance.new("UICorner")
         bc.CornerRadius = UDim.new(1, 0)
         bc.Parent = btn
+        
         local knob = Instance.new("Frame")
-        knob.Size = UDim2.new(0, 16, 0, 16)
-        knob.Position = stateVal and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        knob.Size = UDim2.new(0, 14, 0, 14)
+        knob.Position = stateVal and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)
         knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
         knob.Parent = btn
         local kc = Instance.new("UICorner")
@@ -502,10 +560,20 @@ _modules["Toggle"] = (function()
         kc.Parent = knob
         
         local function updateVisuals()
-            local ti = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+            local ti = TweenInfo.new(0.2, Enum.EasingStyle.Sine)
             Utils.tween(btn, ti, {BackgroundColor3 = stateVal and Theme.Accent or Theme.SecondaryBackground})
-            Utils.tween(knob, ti, {Position = stateVal and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)})
+            Utils.tween(knob, ti, {Position = stateVal and UDim2.new(1, -16, 0.5, -7) or UDim2.new(0, 2, 0.5, -7)})
         end
+        
+        -- Smooth hover transition
+        frm.MouseEnter:Connect(function()
+            Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.SecondaryBackground})
+            Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+        end)
+        frm.MouseLeave:Connect(function()
+            Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.PanelBackground})
+            Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+        end)
         
         btn.MouseButton1Click:Connect(function()
             stateVal = not stateVal
@@ -547,7 +615,7 @@ _modules["Slider"] = (function()
         local formatVal = formatFunc or function(v) return tostring(v) end
         
         local frm = Instance.new("Frame")
-        frm.Size = UDim2.new(1, 0, 0, 50)
+        frm.Size = UDim2.new(1, 0, 0, 48)
         frm.BackgroundColor3 = Theme.PanelBackground
         frm.BackgroundTransparency = Theme.PanelTransparency
         frm.Parent = parent
@@ -565,11 +633,11 @@ _modules["Slider"] = (function()
         lbl.Text = name .. ": " .. formatVal(defaultVal)
         lbl.TextColor3 = Theme.TextSecondary
         lbl.Font = Theme.FontMedium
-        lbl.TextSize = 13
+        lbl.TextSize = 12
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.Parent = frm
         local bg = Instance.new("Frame")
-        bg.Size = UDim2.new(1, -24, 0, 6)
+        bg.Size = UDim2.new(1, -24, 0, 5)
         bg.Position = UDim2.new(0, 12, 0, 32)
         bg.BackgroundColor3 = Theme.SecondaryBackground
         bg.Parent = frm
@@ -600,6 +668,18 @@ _modules["Slider"] = (function()
             lbl.Text = name .. ": " .. formatVal(currentVal)
             if cb then cb(currentVal) end
         end
+        
+        -- Smooth hover transitions
+        frm.MouseEnter:Connect(function()
+            Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.SecondaryBackground})
+            Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+            Utils.tween(fil, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.AccentHover})
+        end)
+        frm.MouseLeave:Connect(function()
+            Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.PanelBackground})
+            Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+            Utils.tween(fil, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.Accent})
+        end)
         
         btn.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -650,7 +730,7 @@ _modules["Dropdown"] = (function()
     
     function Dropdown.new(parent, name, opts, defaultIdx, cb)
         local frm = Instance.new("Frame")
-        frm.Size = UDim2.new(1, 0, 0, 40)
+        frm.Size = UDim2.new(1, 0, 0, 36)
         frm.BackgroundColor3 = Theme.PanelBackground
         frm.BackgroundTransparency = Theme.PanelTransparency
         frm.Parent = parent
@@ -668,23 +748,36 @@ _modules["Dropdown"] = (function()
         lbl.Text = name
         lbl.TextColor3 = Theme.TextSecondary
         lbl.Font = Theme.FontMedium
-        lbl.TextSize = 13
+        lbl.TextSize = 12
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.Parent = frm
+        
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 100, 0, 22)
-        btn.Position = UDim2.new(1, -112, 0.5, -11)
+        btn.Size = UDim2.new(0, 96, 0, 20)
+        btn.Position = UDim2.new(1, -108, 0.5, -10)
         btn.BackgroundColor3 = Theme.SecondaryBackground
         btn.Text = opts[defaultIdx].name
-        btn.TextColor3 = Theme.TextPrimary
+        btn.TextColor3 = Theme.TextSecondary
         btn.Font = Theme.FontBold
-        btn.TextSize = 11
+        btn.TextSize = 10
         btn.Parent = frm
         local bc = Instance.new("UICorner")
-        bc.CornerRadius = UDim.new(0, 6)
+        bc.CornerRadius = UDim.new(0, 4)
         bc.Parent = btn
         
         local cur = defaultIdx
+        
+        -- Smooth hover transitions
+        frm.MouseEnter:Connect(function()
+            Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.SecondaryBackground})
+            Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+            Utils.tween(btn, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+        end)
+        frm.MouseLeave:Connect(function()
+            Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.PanelBackground})
+            Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+            Utils.tween(btn, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+        end)
         
         btn.MouseButton1Click:Connect(function()
             cur = cur + 1
@@ -725,7 +818,7 @@ _modules["Textbox"] = (function()
     
     function Textbox.new(parent, name, placeholderText, cb)
         local frm = Instance.new("Frame")
-        frm.Size = UDim2.new(1, 0, 0, 40)
+        frm.Size = UDim2.new(1, 0, 0, 36)
         frm.BackgroundColor3 = Theme.PanelBackground
         frm.BackgroundTransparency = Theme.PanelTransparency
         frm.Parent = parent
@@ -744,21 +837,26 @@ _modules["Textbox"] = (function()
         lbl.Text = name
         lbl.TextColor3 = Theme.TextSecondary
         lbl.Font = Theme.FontMedium
-        lbl.TextSize = 13
+        lbl.TextSize = 12
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.Parent = frm
         
         local boxBg = Instance.new("Frame")
-        boxBg.Size = UDim2.new(0.5, 0, 0, 24)
-        boxBg.Position = UDim2.new(1, -boxBg.Size.X.Offset - (boxBg.Size.X.Scale * frm.AbsoluteSize.X) - 12, 0.5, -12)
+        boxBg.Size = UDim2.new(0.5, 0, 0, 20)
+        boxBg.Position = UDim2.new(1, -boxBg.Size.X.Offset - (boxBg.Size.X.Scale * frm.AbsoluteSize.X) - 12, 0.5, -10)
         boxBg.BackgroundColor3 = Theme.SecondaryBackground
         boxBg.Parent = frm
         local boxCorner = Instance.new("UICorner")
-        boxCorner.CornerRadius = UDim.new(0, 6)
+        boxCorner.CornerRadius = UDim.new(0, 4)
         boxCorner.Parent = boxBg
         
+        local boxStroke = Instance.new("UIStroke")
+        boxStroke.Color = Theme.Stroke
+        boxStroke.Transparency = 0.95
+        boxStroke.Parent = boxBg
+        
         frm:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-            boxBg.Position = UDim2.new(1, -boxBg.Size.X.Offset - (boxBg.Size.X.Scale * frm.AbsoluteSize.X) - 12, 0.5, -12)
+            boxBg.Position = UDim2.new(1, -boxBg.Size.X.Offset - (boxBg.Size.X.Scale * frm.AbsoluteSize.X) - 12, 0.5, -10)
         end)
         
         local txt = Instance.new("TextBox")
@@ -770,12 +868,32 @@ _modules["Textbox"] = (function()
         txt.PlaceholderColor3 = Theme.TextMuted
         txt.TextColor3 = Theme.TextPrimary
         txt.Font = Theme.FontMedium
-        txt.TextSize = 12
+        txt.TextSize = 11
         txt.TextXAlignment = Enum.TextXAlignment.Left
         txt.ClearTextOnFocus = false
         txt.Parent = boxBg
         
+        -- Smooth hover and focus transitions
+        frm.MouseEnter:Connect(function()
+            Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.SecondaryBackground})
+            Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+        end)
+        frm.MouseLeave:Connect(function()
+            Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.PanelBackground})
+            Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+        end)
+        
+        txt.Focused:Connect(function()
+            Utils.tween(boxStroke, TweenInfo.new(0.15, Enum.EasingStyle.Sine), {
+                Color = Theme.Accent,
+                Transparency = 0.5
+            })
+        end)
         txt.FocusLost:Connect(function(enterPressed)
+            Utils.tween(boxStroke, TweenInfo.new(0.15, Enum.EasingStyle.Sine), {
+                Color = Theme.Stroke,
+                Transparency = 0.95
+            })
             if cb then cb(txt.Text, enterPressed) end
         end)
         

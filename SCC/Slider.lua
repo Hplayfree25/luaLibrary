@@ -14,7 +14,7 @@ function Slider.new(parent, name, minVal, maxVal, defaultVal, formatFunc, cb)
     local formatVal = formatFunc or function(v) return tostring(v) end
     
     local frm = Instance.new("Frame")
-    frm.Size = UDim2.new(1, 0, 0, 50)
+    frm.Size = UDim2.new(1, 0, 0, 48)
     frm.BackgroundColor3 = Theme.PanelBackground
     frm.BackgroundTransparency = Theme.PanelTransparency
     frm.Parent = parent
@@ -32,11 +32,11 @@ function Slider.new(parent, name, minVal, maxVal, defaultVal, formatFunc, cb)
     lbl.Text = name .. ": " .. formatVal(defaultVal)
     lbl.TextColor3 = Theme.TextSecondary
     lbl.Font = Theme.FontMedium
-    lbl.TextSize = 13
+    lbl.TextSize = 12
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Parent = frm
     local bg = Instance.new("Frame")
-    bg.Size = UDim2.new(1, -24, 0, 6)
+    bg.Size = UDim2.new(1, -24, 0, 5)
     bg.Position = UDim2.new(0, 12, 0, 32)
     bg.BackgroundColor3 = Theme.SecondaryBackground
     bg.Parent = frm
@@ -67,6 +67,18 @@ function Slider.new(parent, name, minVal, maxVal, defaultVal, formatFunc, cb)
         lbl.Text = name .. ": " .. formatVal(currentVal)
         if cb then cb(currentVal) end
     end
+    
+    -- Smooth hover transitions
+    frm.MouseEnter:Connect(function()
+        Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.SecondaryBackground})
+        Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+        Utils.tween(fil, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.AccentHover})
+    end)
+    frm.MouseLeave:Connect(function()
+        Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.PanelBackground})
+        Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+        Utils.tween(fil, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.Accent})
+    end)
     
     btn.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then

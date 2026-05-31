@@ -11,7 +11,7 @@ local Utils = import("Utils")
 
 function Dropdown.new(parent, name, opts, defaultIdx, cb)
     local frm = Instance.new("Frame")
-    frm.Size = UDim2.new(1, 0, 0, 40)
+    frm.Size = UDim2.new(1, 0, 0, 36)
     frm.BackgroundColor3 = Theme.PanelBackground
     frm.BackgroundTransparency = Theme.PanelTransparency
     frm.Parent = parent
@@ -29,23 +29,36 @@ function Dropdown.new(parent, name, opts, defaultIdx, cb)
     lbl.Text = name
     lbl.TextColor3 = Theme.TextSecondary
     lbl.Font = Theme.FontMedium
-    lbl.TextSize = 13
+    lbl.TextSize = 12
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Parent = frm
+    
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 100, 0, 22)
-    btn.Position = UDim2.new(1, -112, 0.5, -11)
+    btn.Size = UDim2.new(0, 96, 0, 20)
+    btn.Position = UDim2.new(1, -108, 0.5, -10)
     btn.BackgroundColor3 = Theme.SecondaryBackground
     btn.Text = opts[defaultIdx].name
-    btn.TextColor3 = Theme.TextPrimary
+    btn.TextColor3 = Theme.TextSecondary
     btn.Font = Theme.FontBold
-    btn.TextSize = 11
+    btn.TextSize = 10
     btn.Parent = frm
     local bc = Instance.new("UICorner")
-    bc.CornerRadius = UDim.new(0, 6)
+    bc.CornerRadius = UDim.new(0, 4)
     bc.Parent = btn
     
     local cur = defaultIdx
+    
+    -- Smooth hover transitions
+    frm.MouseEnter:Connect(function()
+        Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.SecondaryBackground})
+        Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+        Utils.tween(btn, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+    end)
+    frm.MouseLeave:Connect(function()
+        Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.PanelBackground})
+        Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+        Utils.tween(btn, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+    end)
     
     btn.MouseButton1Click:Connect(function()
         cur = cur + 1

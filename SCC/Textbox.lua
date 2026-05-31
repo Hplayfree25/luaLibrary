@@ -11,7 +11,7 @@ local Utils = import("Utils")
 
 function Textbox.new(parent, name, placeholderText, cb)
     local frm = Instance.new("Frame")
-    frm.Size = UDim2.new(1, 0, 0, 40)
+    frm.Size = UDim2.new(1, 0, 0, 36)
     frm.BackgroundColor3 = Theme.PanelBackground
     frm.BackgroundTransparency = Theme.PanelTransparency
     frm.Parent = parent
@@ -30,21 +30,26 @@ function Textbox.new(parent, name, placeholderText, cb)
     lbl.Text = name
     lbl.TextColor3 = Theme.TextSecondary
     lbl.Font = Theme.FontMedium
-    lbl.TextSize = 13
+    lbl.TextSize = 12
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Parent = frm
     
     local boxBg = Instance.new("Frame")
-    boxBg.Size = UDim2.new(0.5, 0, 0, 24)
-    boxBg.Position = UDim2.new(1, -boxBg.Size.X.Offset - (boxBg.Size.X.Scale * frm.AbsoluteSize.X) - 12, 0.5, -12)
+    boxBg.Size = UDim2.new(0.5, 0, 0, 20)
+    boxBg.Position = UDim2.new(1, -boxBg.Size.X.Offset - (boxBg.Size.X.Scale * frm.AbsoluteSize.X) - 12, 0.5, -10)
     boxBg.BackgroundColor3 = Theme.SecondaryBackground
     boxBg.Parent = frm
     local boxCorner = Instance.new("UICorner")
-    boxCorner.CornerRadius = UDim.new(0, 6)
+    boxCorner.CornerRadius = UDim.new(0, 4)
     boxCorner.Parent = boxBg
     
+    local boxStroke = Instance.new("UIStroke")
+    boxStroke.Color = Theme.Stroke
+    boxStroke.Transparency = 0.95
+    boxStroke.Parent = boxBg
+    
     frm:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-        boxBg.Position = UDim2.new(1, -boxBg.Size.X.Offset - (boxBg.Size.X.Scale * frm.AbsoluteSize.X) - 12, 0.5, -12)
+        boxBg.Position = UDim2.new(1, -boxBg.Size.X.Offset - (boxBg.Size.X.Scale * frm.AbsoluteSize.X) - 12, 0.5, -10)
     end)
     
     local txt = Instance.new("TextBox")
@@ -56,12 +61,32 @@ function Textbox.new(parent, name, placeholderText, cb)
     txt.PlaceholderColor3 = Theme.TextMuted
     txt.TextColor3 = Theme.TextPrimary
     txt.Font = Theme.FontMedium
-    txt.TextSize = 12
+    txt.TextSize = 11
     txt.TextXAlignment = Enum.TextXAlignment.Left
     txt.ClearTextOnFocus = false
     txt.Parent = boxBg
     
+    -- Smooth hover and focus transitions
+    frm.MouseEnter:Connect(function()
+        Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.SecondaryBackground})
+        Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextPrimary})
+    end)
+    frm.MouseLeave:Connect(function()
+        Utils.tween(frm, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {BackgroundColor3 = Theme.PanelBackground})
+        Utils.tween(lbl, TweenInfo.new(0.2, Enum.EasingStyle.Sine), {TextColor3 = Theme.TextSecondary})
+    end)
+    
+    txt.Focused:Connect(function()
+        Utils.tween(boxStroke, TweenInfo.new(0.15, Enum.EasingStyle.Sine), {
+            Color = Theme.Accent,
+            Transparency = 0.5
+        })
+    end)
     txt.FocusLost:Connect(function(enterPressed)
+        Utils.tween(boxStroke, TweenInfo.new(0.15, Enum.EasingStyle.Sine), {
+            Color = Theme.Stroke,
+            Transparency = 0.95
+        })
         if cb then cb(txt.Text, enterPressed) end
     end)
     
