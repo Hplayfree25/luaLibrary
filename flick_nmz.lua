@@ -1,3 +1,36 @@
+--[[
+    ================================================================================
+    LICENSE & DISTRIBUTION NOTICE
+    ================================================================================
+    Developed by NMZ Team (c) 2026
+
+    This software is released under a strict Open-Source, Free-Use License.
+    By using, copying, modifying, merging, publishing, distributing, sublicensing,
+    or integrating this source code (or any derivative work thereof) in any form,
+    you explicitly agree to the following terms:
+
+    1. MANDATORY OPEN-SOURCE REQUIREMENT
+       This code and any project derived from it, or containing parts of it, MUST
+       remain 100% open source. The complete, unmodified source code must be made
+       freely and publicly available at all times to any recipient, user, or
+       developer, without exceptions.
+
+    2. ABSOLUTE KEYLESS AND FREE-USE MANDATE
+       This script, and any scripts, hubs, or executors that utilize any portion
+       of this code, MUST NOT be placed behind any form of gateway, paywall,
+       monetization link, or key system (including but not limited to Linkvertise,
+       LootLabs, Key-gateways, or custom validation protocols). Access to this
+       software MUST be completely keyless, immediate, and direct.
+
+    3. CREDITS AND ATTRIBUTION
+       Appropriate credit to the original creators (NMZ Team) must be visible 
+       and preserved within the source files and the user interface where applicable.
+
+    ANY VIOLATION OF THESE TERMS CONSTITUTES A DIRECT BREACH OF THIS LICENSE
+    AND AN INFRINGEMENT UPON THE WORKS OF THE ORIGINAL DEVELOPERS. KEEP IT FREE,
+    KEEP IT OPEN, AND RESPECT THE DEVELOPERS' VISION.
+    ================================================================================
+--]]
 local id = "NMZ_DFLICK2"
 local getGenv = getgenv or function() return _G end
 
