@@ -10,7 +10,7 @@ function Auth.show(config)
     local placeholder = config.KeyPlaceholder or "Enter Key..."
     local submitText = config.SubmitText or "Verify Key"
     local onSubmit = config.OnSubmit
-    local onLink = config.OnLink
+    local links = config.Links or {}
 
     local ts = Utils.safeSvc("TweenService")
     
@@ -132,8 +132,46 @@ function Auth.show(config)
         ts:Create(submitBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Accent}):Play()
     end)
 
+    local linkContainer = Instance.new("Frame")
+    linkContainer.Size = UDim2.new(1, -40, 0, 20)
+    linkContainer.Position = UDim2.new(0, 20, 0, 200)
+    linkContainer.BackgroundTransparency = 1
+    linkContainer.Parent = main
+    
+    local linkLayout = Instance.new("UIListLayout")
+    linkLayout.FillDirection = Enum.FillDirection.Horizontal
+    linkLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    linkLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    linkLayout.Padding = UDim.new(0, 15)
+    linkLayout.Parent = linkContainer
+    
+    for i, linkData in ipairs(links) do
+        local linkBtn = Instance.new("TextButton")
+        linkBtn.Size = UDim2.new(0, 80, 1, 0)
+        linkBtn.BackgroundTransparency = 1
+        linkBtn.Text = linkData.Name or "Link"
+        linkBtn.TextColor3 = Theme.TextSecondary
+        linkBtn.Font = Theme.FontMedium
+        linkBtn.TextSize = 12
+        linkBtn.Parent = linkContainer
+        
+        linkBtn.MouseEnter:Connect(function()
+            ts:Create(linkBtn, TweenInfo.new(0.2), {TextColor3 = Theme.TextPrimary}):Play()
+        end)
+        linkBtn.MouseLeave:Connect(function()
+            ts:Create(linkBtn, TweenInfo.new(0.2), {TextColor3 = Theme.TextSecondary}):Play()
+        end)
+        
+        linkBtn.MouseButton1Click:Connect(function()
+            if linkData.OnClick then
+                linkData.OnClick()
+            end
+        end)
+    end
+
     ts:Create(overlay, TweenInfo.new(0.5), {BackgroundTransparency = 0.3}):Play()
-    ts:Create(main, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 320, 0, 210)}):Play()
+    local targetHeight = #links > 0 and 240 or 210
+    ts:Create(main, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 320, 0, targetHeight)}):Play()
     
     Drag.makeDraggable(main)
 

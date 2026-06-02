@@ -12,18 +12,34 @@ local Window = UI.CreateWindow({
     ToggleText = "TST",
     Size = UDim2.new(0, 500, 0, 300),
     HideOnStartup = true,
-    OnIntroCompleted = function()
+    OnIntroCompleted = function(win)
         UI.CreateAuth({
             Title = "NMZUI PREMIUM",
             Subtitle = "Please enter your access key.",
             KeyPlaceholder = "Enter Key (NMZUI_PREMIUM)",
             SubmitText = "Verify Key",
+            Links = {
+                {
+                    Name = "Get Key",
+                    OnClick = function()
+                        print("Opening Get Key link...")
+                        -- setclipboard("https://link-to-key.com")
+                    end
+                },
+                {
+                    Name = "Discord",
+                    OnClick = function()
+                        print("Opening Discord...")
+                        -- setclipboard("https://discord.gg/nmzui")
+                    end
+                }
+            },
             OnSubmit = function(key, callback)
                 task.spawn(function()
                     task.wait(1.5)
                     if key == "NMZUI_PREMIUM" then
                         callback(true)
-                        Window.show()
+                        win.show()
                         UI.Notify("Success", "Welcome to NMZUI Premium!", 3)
                     else
                         callback(false)
