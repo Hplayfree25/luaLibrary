@@ -143,7 +143,7 @@ function Auth.show(config)
 
     if #links > 0 then
         local linkContainer = Instance.new("Frame")
-        linkContainer.Size = UDim2.new(1, -40, 0, 20)
+        linkContainer.Size = UDim2.new(1, -40, 0, 26)
         linkContainer.BackgroundTransparency = 1
         linkContainer.LayoutOrder = 5
         linkContainer.Parent = main
@@ -157,24 +157,58 @@ function Auth.show(config)
         
         for i, linkData in ipairs(links) do
             local linkBtn = Instance.new("TextButton")
-            linkBtn.Size = UDim2.new(0, 80, 1, 0)
-            linkBtn.BackgroundTransparency = 1
-            linkBtn.Text = linkData.Name or "Link"
-            linkBtn.TextColor3 = Theme.TextSecondary
-            linkBtn.Font = Theme.FontMedium
-            linkBtn.TextSize = 12
+            linkBtn.Size = UDim2.new(0, 110, 0, 26)
+            linkBtn.BackgroundColor3 = Theme.PanelBackground
+            linkBtn.Text = ""
+            linkBtn.AutoButtonColor = false
             linkBtn.Parent = linkContainer
             
+            local linkCorner = Instance.new("UICorner")
+            linkCorner.CornerRadius = UDim.new(0, 4)
+            linkCorner.Parent = linkBtn
+            
+            local linkStroke = Instance.new("UIStroke")
+            linkStroke.Color = Theme.Stroke
+            linkStroke.Transparency = 0.8
+            linkStroke.Parent = linkBtn
+
+            local icon
+            local textXOffset = 0
+            if linkData.Icon then
+                icon = Instance.new("ImageLabel")
+                icon.Size = UDim2.new(0, 14, 0, 14)
+                icon.Position = UDim2.new(0, 10, 0.5, -7)
+                icon.BackgroundTransparency = 1
+                icon.Image = linkData.Icon
+                icon.ImageColor3 = Theme.TextSecondary
+                icon.Parent = linkBtn
+                textXOffset = 28
+            end
+            
+            local linkLbl = Instance.new("TextLabel")
+            linkLbl.Size = UDim2.new(1, -textXOffset, 1, 0)
+            linkLbl.Position = UDim2.new(0, textXOffset, 0, 0)
+            linkLbl.BackgroundTransparency = 1
+            linkLbl.Text = linkData.Name or "Link"
+            linkLbl.TextColor3 = Theme.TextSecondary
+            linkLbl.Font = Theme.FontMedium
+            linkLbl.TextSize = 11
+            linkLbl.Parent = linkBtn
+            
             linkBtn.MouseEnter:Connect(function()
-                ts:Create(linkBtn, TweenInfo.new(0.2), {TextColor3 = Theme.TextPrimary}):Play()
+                ts:Create(linkBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.SecondaryBackground}):Play()
+                ts:Create(linkLbl, TweenInfo.new(0.2), {TextColor3 = Theme.TextPrimary}):Play()
+                if icon then ts:Create(icon, TweenInfo.new(0.2), {ImageColor3 = Theme.TextPrimary}):Play() end
             end)
             linkBtn.MouseLeave:Connect(function()
-                ts:Create(linkBtn, TweenInfo.new(0.2), {TextColor3 = Theme.TextSecondary}):Play()
+                ts:Create(linkBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.PanelBackground}):Play()
+                ts:Create(linkLbl, TweenInfo.new(0.2), {TextColor3 = Theme.TextSecondary}):Play()
+                if icon then ts:Create(icon, TweenInfo.new(0.2), {ImageColor3 = Theme.TextSecondary}):Play() end
             end)
             
             linkBtn.MouseButton1Click:Connect(function()
                 if linkData.OnClick then
-                    linkData.OnClick()
+                    linkData.OnClick(linkLbl)
                 end
             end)
         end

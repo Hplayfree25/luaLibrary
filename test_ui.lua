@@ -14,20 +14,27 @@ local Window = UI.CreateWindow({
     HideOnStartup = true,
     OnIntroCompleted = function(win)
         UI.CreateAuth({
-            Title = "NMZUI PREMIUM",
-            Subtitle = "Please enter your access key.",
-            KeyPlaceholder = "Enter Key (NMZUI_PREMIUM)",
+            Title = "Faldloudnd's App",
+            Subtitle = "Please enter your KeyAuth license.",
+            KeyPlaceholder = "Enter License Key...",
             SubmitText = "Verify Key",
             Links = {
                 {
                     Name = "Get Key",
-                    OnClick = function()
+                    Icon = "rbxassetid://10709769508",
+                    OnClick = function(lbl)
                         print("Opening Get Key link...")
                         -- setclipboard("https://link-to-key.com")
+                        local oldText = lbl.Text
+                        lbl.Text = "Copied!"
+                        UI.Notify("Success", "Link Copied to Clipboard!", 3)
+                        task.wait(1.5)
+                        lbl.Text = oldText
                     end
                 },
                 {
                     Name = "Discord",
+                    Icon = "rbxassetid://14800392398",
                     OnClick = function()
                         print("Opening Discord...")
                         -- setclipboard("https://discord.gg/nmzui")
@@ -36,14 +43,17 @@ local Window = UI.CreateWindow({
             },
             OnSubmit = function(key, callback)
                 task.spawn(function()
+                    UI.Notify("KeyAuth", "Connecting to server...", 2)
                     task.wait(1.5)
-                    if key == "NMZUI_PREMIUM" then
+                    
+                    -- Here you would put your actual KeyAuth HttpGet request
+                    if key == "KEYAUTH-TEST-123" or key == "NMZUI_PREMIUM" then
                         callback(true)
                         win.show()
-                        UI.Notify("Success", "Welcome to NMZUI Premium!", 3)
+                        UI.Notify("KeyAuth", "License validated successfully!", 3)
                     else
                         callback(false)
-                        UI.Notify("Error", "Invalid Key!", 3)
+                        UI.Notify("KeyAuth Error", "Invalid license key.", 3)
                     end
                 end)
             end
