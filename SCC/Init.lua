@@ -38,6 +38,7 @@ Lib.Utils = getModule("Utils")
 Lib.Drag = getModule("Drag")
 Lib.Window = getModule("Window")
 Lib.Components = getModule("Components")
+Lib.Notification = getModule("Notification")
 
 function Lib.CreateWindow(options)
     return Lib.Window.new(options)
@@ -65,6 +66,10 @@ end
 
 function Lib.CreateTextbox(tab, name, placeholderText, cb)
     return Lib.Components.Textbox.new(tab.container, name, placeholderText, cb)
+end
+
+function Lib.Notify(config)
+    return Lib.Notification.show(config)
 end
 
 return Lib

@@ -13,6 +13,8 @@ local Window = UI.CreateWindow({
     Size = UDim2.new(0, 500, 0, 300)
 })
 
+UI.Notify("Universal UI", "NMZUI successfully loaded!", 4)
+
 getGenv()[scriptId] = function()
     if Window then
         Window.destroy()
@@ -41,6 +43,10 @@ end)
 
 UI.CreateTextbox(Tab2, "Test Textbox", "Type something...", function(text, enterPressed)
     print("Textbox text changed to:", text, "| Enter pressed:", enterPressed)
+end)
+
+UI.CreateButton(Tab2, "Send Test Notification", function()
+    UI.Notify("Universal UI", "This is a clean, modern notification toast!", 4)
 end)
 
 UI.CreateButton(Tab2, "Unload Script", function()
