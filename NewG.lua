@@ -31,9 +31,15 @@
     KEEP IT OPEN, AND RESPECT THE DEVELOPERS' VISION.
     ================================================================================
 --]]
+local isExecutorSupported = true
+if type(hookfunction) ~= "function" then
+    isExecutorSupported = false
+end
+
 local cloneref = cloneref or function(i: Instance) return i; end;
 local clonefunction = clonefunction or function(f: (...any) -> (...any)) return f; end;
 local newcclosure = newcclosure or clonefunction;
+local hookfunction = hookfunction or function(old, new) return old end;
 local gethui = gethui or function()
     local success, coregui = pcall(game.GetService, game, "CoreGui")
     return success and coregui or nil
@@ -941,3 +947,14 @@ if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
 end
 
 print("MNZ ENTRENCHED WW1 - SCC UI LOADED")
+
+if not isExecutorSupported then
+    task.spawn(function()
+        task.wait(1.5) -- Beri waktu agar UI render sempurna
+        UI.Notify({
+            Title = "Executor Not Supported",
+            Content = "Your executor lacks UNC support (hookfunction). Advanced features like Aimbot & Fast Bolt will NOT work!",
+            Duration = 10
+        })
+    end)
+end
