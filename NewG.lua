@@ -950,11 +950,11 @@ print("MNZ ENTRENCHED WW1 - SCC UI LOADED")
 
 if not isExecutorSupported then
     task.spawn(function()
-        task.wait(1.5) -- Beri waktu agar UI render sempurna
+        task.wait(1.5)
         UI.Notify({
             Title = "Executor Not Supported",
             Content = "Your executor lacks UNC support (hookfunction). Advanced features like Aimbot & Fast Bolt will NOT work!",
-            Duration = 10
+            Duration = 5
         })
     end)
 end
