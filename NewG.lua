@@ -183,7 +183,6 @@ local fovSize = 150
 local fovColor = Color3.new(1,0,0)
 
 local silentAimDistance = 1000
-
 local smoothness = 0.3
 local aimModePC = "Camera"
 local predEnabled = true
@@ -192,6 +191,7 @@ local triggerbotEnabled = false
 local wallCheckEnabled = true
 local triggerCooldown = 0.05
 local lastTriggerTime = 0
+local fovAtMouse = true
 
 local hitboxEnabled = false
 local hitboxMultiplier = 2.0
@@ -430,7 +430,7 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 local function getClosestEnemy()
-    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    local center = fovAtMouse and UserInputService:GetMouseLocation() or Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     local closest = nil
     local closestDist = fovSize
     local bestPos = nil
@@ -458,7 +458,7 @@ local function getClosestEnemy()
 end
 
 local function getClosestSilentEnemy()
-    local center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    local center = fovAtMouse and UserInputService:GetMouseLocation() or Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
     local closest = nil
     local closestDist = fovSize
     local bestPos = nil
@@ -547,8 +547,12 @@ RunService.RenderStepped:Connect(function()
     if scriptUnloaded then return end
 
     if fovCircle and fovCircle.Visible then
-        local mousePos = UserInputService:GetMouseLocation()
-        fovCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
+        if fovAtMouse then
+            local mousePos = UserInputService:GetMouseLocation()
+            fovCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
+        else
+            fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        end
     end
 
     updateBoxes()
@@ -722,6 +726,9 @@ end)
 UI.CreateToggle(TabAim, "Aimbot Toggle", aimEnabled, function(Value)
     aimEnabled = Value
     updateFOVCircle()
+end)
+UI.CreateToggle(TabAim, "FOV at Mouse", fovAtMouse, function(Value)
+    fovAtMouse = Value
 end)
 UI.CreateDropdown(TabAim, "Target Part", {{name="Head",val="Head"},{name="HumanoidRootPart",val="HumanoidRootPart"}}, 1, function(Option)
     aimPart = Option
