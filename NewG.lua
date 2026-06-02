@@ -695,8 +695,19 @@ local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hplayfree2
 local Window = UI.CreateWindow({
     Title = "NMZ Hub",
     ToggleText = "NMZ",
-    Size = UDim2.new(0, 500, 0, 320)
+    Size = UDim2.new(0, 500, 0, 320),
+    Keybind = Enum.KeyCode.LeftAlt,
+    HideOnStartup = true
 })
+
+task.spawn(function()
+    task.wait(1)
+    UI.Notify({
+        Title = "UI Tersembunyi (Hidden)",
+        Content = "Tekan tombol 'Alt' (Left Alt) di keyboard untuk membuka menu. Tombol bulat NMZ di layar ditujukan khusus untuk pengguna Mobile.",
+        Duration = 10
+    })
+end)
 
 getGenv()[scriptId] = function()
     scriptUnloaded = true
