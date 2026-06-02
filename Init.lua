@@ -468,7 +468,7 @@ _modules["Window"] = (function()
             storeOriginalTrans()
     
             if type(options.OnIntroCompleted) == "function" then
-                task.spawn(options.OnIntroCompleted)
+                task.spawn(function() options.OnIntroCompleted(self) end)
             end
     
             if options.HideOnStartup then
