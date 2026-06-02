@@ -36,7 +36,7 @@ function Auth.show(config)
     main.Position = UDim2.new(0.5, 0, 0.5, 0)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.BackgroundColor3 = Theme.Background
-    main.BackgroundTransparency = Theme.Transparency
+    main.BackgroundTransparency = Theme.BackgroundTransparency
     main.ClipsDescendants = true
     main.Parent = gui
 
@@ -55,7 +55,7 @@ function Auth.show(config)
     title.Position = UDim2.new(0, 20, 0, 20)
     title.BackgroundTransparency = 1
     title.Text = titleText
-    title.TextColor3 = Theme.Text
+    title.TextColor3 = Theme.TextPrimary
     title.Font = Theme.FontBold
     title.TextSize = 18
     title.TextXAlignment = Enum.TextXAlignment.Left
@@ -66,7 +66,7 @@ function Auth.show(config)
     subtitle.Position = UDim2.new(0, 20, 0, 50)
     subtitle.BackgroundTransparency = 1
     subtitle.Text = subtitleText
-    subtitle.TextColor3 = Theme.SubText
+    subtitle.TextColor3 = Theme.TextSecondary
     subtitle.Font = Theme.FontMedium
     subtitle.TextSize = 13
     subtitle.TextWrapped = true
@@ -95,8 +95,8 @@ function Auth.show(config)
     textBox.BackgroundTransparency = 1
     textBox.Text = ""
     textBox.PlaceholderText = placeholder
-    textBox.PlaceholderColor3 = Theme.SubText
-    textBox.TextColor3 = Theme.Text
+    textBox.PlaceholderColor3 = Theme.TextSecondary
+    textBox.TextColor3 = Theme.TextPrimary
     textBox.Font = Theme.FontMedium
     textBox.TextSize = 14
     textBox.TextXAlignment = Enum.TextXAlignment.Left
@@ -126,7 +126,7 @@ function Auth.show(config)
     btnCorner.Parent = submitBtn
 
     submitBtn.MouseEnter:Connect(function()
-        ts:Create(submitBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.HoveredElement}):Play()
+        ts:Create(submitBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.AccentHover}):Play()
     end)
     submitBtn.MouseLeave:Connect(function()
         ts:Create(submitBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Accent}):Play()
@@ -154,7 +154,7 @@ function Auth.show(config)
         isLoading = true
         submitBtn.Text = "Verifying..."
         submitBtn.BackgroundColor3 = Theme.PanelBackground
-        submitBtn.TextColor3 = Theme.SubText
+        submitBtn.TextColor3 = Theme.TextSecondary
         textBox.TextEditable = false
         
         if onSubmit then
