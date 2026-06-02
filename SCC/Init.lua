@@ -39,6 +39,7 @@ Lib.Drag = getModule("Drag")
 Lib.Window = getModule("Window")
 Lib.Components = getModule("Components")
 Lib.Notification = getModule("Notification")
+Lib.Auth = getModule("Auth")
 
 function Lib.CreateWindow(options)
     return Lib.Window.new(options)
@@ -70,6 +71,10 @@ end
 
 function Lib.Notify(config)
     return Lib.Notification.show(config)
+end
+
+function Lib.CreateAuth(config)
+    return Lib.Auth.show(config)
 end
 
 return Lib

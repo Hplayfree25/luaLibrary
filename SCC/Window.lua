@@ -210,6 +210,39 @@ function Window.new(options)
         end
     end
 
+    local function openWindow()
+        frmMain.Visible = true
+        Utils.tween(frmMain, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = windowSize,
+            Position = UDim2.new(0.5, -windowSize.X.Offset/2, 0.5, -windowSize.Y.Offset/2),
+            BackgroundTransparency = Theme.BackgroundTransparency
+        })
+        Utils.tween(fs1, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Transparency = Theme.StrokeTransparency
+        })
+
+        for _, desc in ipairs(frmMain:GetDescendants()) do
+            if desc:IsA("Frame") or desc:IsA("ScrollingFrame") then
+                if desc ~= frmMain then
+                    local orig = desc:GetAttribute("OrigTrans") or 0
+                    Utils.tween(desc, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = orig})
+                end
+            elseif desc:IsA("UIStroke") then
+                if desc ~= fs1 then
+                    local orig = desc:GetAttribute("OrigTrans") or 0
+                    Utils.tween(desc, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = orig})
+                end
+            elseif desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+                local orig = desc:GetAttribute("OrigTrans") or 0
+                Utils.tween(desc, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = orig})
+            end
+        end
+
+        Utils.tween(btnTgl, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.15})
+        Utils.tween(bs1, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 0.90})
+        Utils.tween(lblTitleTgl, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
+    end
+
     -- Run intro animations in separate thread
     task.spawn(function()
         task.wait(0.2)
@@ -311,39 +344,15 @@ function Window.new(options)
         -- Store and fade out all children
         storeOriginalTrans()
 
-        -- Pop Main Frame in
-        frmMain.Visible = true
-        Utils.tween(frmMain, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-            Size = windowSize,
-            Position = UDim2.new(0.5, -windowSize.X.Offset/2, 0.5, -windowSize.Y.Offset/2),
-            BackgroundTransparency = Theme.BackgroundTransparency
-        })
-        Utils.tween(fs1, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-            Transparency = Theme.StrokeTransparency
-        })
-
-        -- Fade in main frame content
-        for _, desc in ipairs(frmMain:GetDescendants()) do
-            if desc:IsA("Frame") or desc:IsA("ScrollingFrame") then
-                if desc ~= frmMain then
-                    local orig = desc:GetAttribute("OrigTrans") or 0
-                    Utils.tween(desc, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = orig})
-                end
-            elseif desc:IsA("UIStroke") then
-                if desc ~= fs1 then
-                    local orig = desc:GetAttribute("OrigTrans") or 0
-                    Utils.tween(desc, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = orig})
-                end
-            elseif desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-                local orig = desc:GetAttribute("OrigTrans") or 0
-                Utils.tween(desc, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = orig})
-            end
+        if type(options.OnIntroCompleted) == "function" then
+            task.spawn(options.OnIntroCompleted)
         end
 
-        -- Fade in floating toggle button
-        Utils.tween(btnTgl, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.15})
-        Utils.tween(bs1, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 0.90})
-        Utils.tween(lblTitleTgl, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
+        if options.HideOnStartup then
+            return
+        end
+
+        openWindow()
     end)
 
     -- Toggle close/open transition (Collapse / Expand)
@@ -446,6 +455,7 @@ function Window.new(options)
         rightPanel = rightPanel,
         tabContainer = tabCont,
         theme = Theme,
+        show = openWindow,
         destroy = function()
             gui:Destroy()
         end

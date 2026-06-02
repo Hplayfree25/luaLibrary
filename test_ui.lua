@@ -10,10 +10,30 @@ local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hplayfree2
 local Window = UI.CreateWindow({
     Title = "Universal UI Test",
     ToggleText = "TST",
-    Size = UDim2.new(0, 500, 0, 300)
+    Size = UDim2.new(0, 500, 0, 300),
+    HideOnStartup = true,
+    OnIntroCompleted = function()
+        UI.CreateAuth({
+            Title = "NMZUI PREMIUM",
+            Subtitle = "Please enter your access key.",
+            KeyPlaceholder = "Enter Key (NMZUI_PREMIUM)",
+            SubmitText = "Verify Key",
+            OnSubmit = function(key, callback)
+                task.spawn(function()
+                    task.wait(1.5)
+                    if key == "NMZUI_PREMIUM" then
+                        callback(true)
+                        Window.show()
+                        UI.Notify("Success", "Welcome to NMZUI Premium!", 3)
+                    else
+                        callback(false)
+                        UI.Notify("Error", "Invalid Key!", 3)
+                    end
+                end)
+            end
+        })
+    end
 })
-
-UI.Notify("Universal UI", "NMZUI successfully loaded!", 4)
 
 getGenv()[scriptId] = function()
     if Window then
