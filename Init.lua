@@ -141,8 +141,12 @@ _modules["Window"] = (function()
         
         local Theme = options.Theme or DefaultTheme
         local titleText = options.Title or "Universal UI"
-        local toggleText = options.ToggleText or "UI"
         local windowSize = options.Size or UDim2.new(0, 600, 0, 380)
+        
+        local toggleText = options.ToggleText or "UI"
+        local uis = Utils.safeSvc("UserInputService")
+        local isMobile = uis.TouchEnabled
+        local toggleKey = options.Keybind or Enum.KeyCode.LeftAlt
         
         local self = {}
         
@@ -160,6 +164,7 @@ _modules["Window"] = (function()
         btnTgl.BackgroundTransparency = 1
         btnTgl.Text = ""
         btnTgl.Active = true
+        btnTgl.Visible = false
         btnTgl.Parent = gui
     
         local bc1 = Instance.new("UICorner")
@@ -362,10 +367,6 @@ _modules["Window"] = (function()
                     Utils.tween(desc, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = orig})
                 end
             end
-    
-            Utils.tween(btnTgl, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.15})
-            Utils.tween(bs1, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 0.90})
-            Utils.tween(lblTitleTgl, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
         end
     
         -- Run intro animations in separate thread
@@ -474,6 +475,12 @@ _modules["Window"] = (function()
             end
     
             if options.HideOnStartup then
+                if isMobile then
+                    btnTgl.Visible = true
+                    Utils.tween(btnTgl, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.15})
+                    Utils.tween(bs1, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 0.90})
+                    Utils.tween(lblTitleTgl, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
+                end
                 return
             end
     
@@ -484,6 +491,64 @@ _modules["Window"] = (function()
         local clickTime = 0
         local isAnimating = false
         
+        local function toggleUI()
+            if isAnimating then return end
+            isAnimating = true
+            if frmMain.Visible then
+                -- Collapse Animation (Closing)
+                local targetSize = UDim2.new(windowSize.X.Scale, windowSize.X.Offset - 20, windowSize.Y.Scale, windowSize.Y.Offset - 20)
+                local targetPos = UDim2.new(0.5, -targetSize.X.Offset/2, 0.5, -targetSize.Y.Offset/2)
+                
+                -- Fade out descendants
+                for _, desc in ipairs(frmMain:GetDescendants()) do
+                    if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
+                        Utils.tween(desc, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 1})
+                    elseif desc:IsA("Frame") or desc:IsA("ScrollingFrame") then
+                        if desc ~= frmMain then
+                            Utils.tween(desc, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+                        end
+                    elseif desc:IsA("UIStroke") then
+                        if desc ~= fs1 then
+                            Utils.tween(desc, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 1})
+                        end
+                    end
+                end
+                
+                Utils.tween(frmMain, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    Size = targetSize,
+                    Position = targetPos,
+                    BackgroundTransparency = 1
+                })
+                local strokeTween = Utils.tween(fs1, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    Transparency = 1
+                })
+                
+                strokeTween.Completed:Wait()
+                frmMain.Visible = false
+                
+                if isMobile then
+                    btnTgl.Visible = true
+                    Utils.tween(btnTgl, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0.15})
+                    Utils.tween(bs1, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 0.90})
+                    Utils.tween(lblTitleTgl, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0})
+                end
+                
+                isAnimating = false
+            else
+                -- Expand Animation (Opening)
+                if isMobile then
+                    Utils.tween(btnTgl, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
+                    Utils.tween(bs1, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 1})
+                    Utils.tween(lblTitleTgl, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 1})
+                    task.delay(0.2, function() btnTgl.Visible = false end)
+                end
+                
+                openWindow()
+                task.wait(0.3)
+                isAnimating = false
+            end
+        end
+        
         btnTgl.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 clickTime = tick()
@@ -493,81 +558,15 @@ _modules["Window"] = (function()
         btnTgl.InputEnded:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                 if tick() - clickTime < 0.2 and not isAnimating then
-                    isAnimating = true
-                    if frmMain.Visible then
-                        -- Collapse Animation (Closing)
-                        local targetSize = UDim2.new(windowSize.X.Scale, windowSize.X.Offset - 20, windowSize.Y.Scale, windowSize.Y.Offset - 20)
-                        local targetPos = UDim2.new(0.5, -targetSize.X.Offset/2, 0.5, -targetSize.Y.Offset/2)
-                        
-                        -- Fade out descendants
-                        for _, desc in ipairs(frmMain:GetDescendants()) do
-                            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-                                Utils.tween(desc, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 1})
-                            elseif desc:IsA("Frame") or desc:IsA("ScrollingFrame") then
-                                if desc ~= frmMain then
-                                    Utils.tween(desc, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 1})
-                                end
-                            elseif desc:IsA("UIStroke") then
-                                if desc ~= fs1 then
-                                    Utils.tween(desc, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = 1})
-                                end
-                            end
-                        end
-                        
-                        Utils.tween(frmMain, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                            Size = targetSize,
-                            Position = targetPos,
-                            BackgroundTransparency = 1
-                        })
-                        local strokeTween = Utils.tween(fs1, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                            Transparency = 1
-                        })
-                        
-                        strokeTween.Completed:Wait()
-                        frmMain.Visible = false
-                        isAnimating = false
-                    else
-                        -- Expand Animation (Opening)
-                        frmMain.Visible = true
-                        local initialSize = UDim2.new(windowSize.X.Scale, windowSize.X.Offset - 20, windowSize.Y.Scale, windowSize.Y.Offset - 20)
-                        local initialPos = UDim2.new(0.5, -initialSize.X.Offset/2, 0.5, -initialSize.Y.Offset/2)
-                        
-                        frmMain.Size = initialSize
-                        frmMain.Position = initialPos
-                        frmMain.BackgroundTransparency = 1
-                        fs1.Transparency = 1
-                        
-                        Utils.tween(frmMain, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-                            Size = windowSize,
-                            Position = UDim2.new(0.5, -windowSize.X.Offset/2, 0.5, -windowSize.Y.Offset/2),
-                            BackgroundTransparency = Theme.BackgroundTransparency
-                        })
-                        Utils.tween(fs1, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                            Transparency = Theme.StrokeTransparency
-                        })
-                        
-                        -- Fade in descendants
-                        for _, desc in ipairs(frmMain:GetDescendants()) do
-                            if desc:IsA("TextLabel") or desc:IsA("TextButton") or desc:IsA("TextBox") then
-                                local orig = desc:GetAttribute("OrigTrans") or 0
-                                Utils.tween(desc, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = orig})
-                            elseif desc:IsA("Frame") or desc:IsA("ScrollingFrame") then
-                                if desc ~= frmMain then
-                                    local orig = desc:GetAttribute("OrigTrans") or 0
-                                    Utils.tween(desc, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = orig})
-                                end
-                            elseif desc:IsA("UIStroke") then
-                                if desc ~= fs1 then
-                                    local orig = desc:GetAttribute("OrigTrans") or 0
-                                    Utils.tween(desc, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Transparency = orig})
-                                end
-                            end
-                        end
-                        
-                        task.wait(0.3)
-                        isAnimating = false
-                    end
+                    toggleUI()
                 end
+            end
+        end)
+    
+        uis.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            if input.KeyCode == toggleKey then
+                toggleUI()
             end
         end)
     
