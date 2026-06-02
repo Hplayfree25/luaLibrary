@@ -181,8 +181,10 @@ local aimKey = Enum.UserInputType.MouseButton2
 local aimPart = "Head"
 local fovSize = 150
 local fovColor = Color3.new(1,0,0)
+local centerFovEnabled = true
 
 local silentAimDistance = 1000
+
 local smoothness = 0.3
 local aimModePC = "Camera"
 local predEnabled = true
@@ -191,7 +193,6 @@ local triggerbotEnabled = false
 local wallCheckEnabled = true
 local triggerCooldown = 0.05
 local lastTriggerTime = 0
-local fovAtMouse = true
 
 local hitboxEnabled = false
 local hitboxMultiplier = 2.0
@@ -430,7 +431,13 @@ LocalPlayer.CharacterAdded:Connect(function()
 end)
 
 local function getClosestEnemy()
-    local center = fovAtMouse and UserInputService:GetMouseLocation() or Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    local center
+    if centerFovEnabled then
+        center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    else
+        local mousePos = UserInputService:GetMouseLocation()
+        center = Vector2.new(mousePos.X, mousePos.Y)
+    end
     local closest = nil
     local closestDist = fovSize
     local bestPos = nil
@@ -458,7 +465,13 @@ local function getClosestEnemy()
 end
 
 local function getClosestSilentEnemy()
-    local center = fovAtMouse and UserInputService:GetMouseLocation() or Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    local center
+    if centerFovEnabled then
+        center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+    else
+        local mousePos = UserInputService:GetMouseLocation()
+        center = Vector2.new(mousePos.X, mousePos.Y)
+    end
     local closest = nil
     local closestDist = fovSize
     local bestPos = nil
@@ -547,11 +560,11 @@ RunService.RenderStepped:Connect(function()
     if scriptUnloaded then return end
 
     if fovCircle and fovCircle.Visible then
-        if fovAtMouse then
+        if centerFovEnabled then
+            fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        else
             local mousePos = UserInputService:GetMouseLocation()
             fovCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
-        else
-            fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
         end
     end
 
@@ -727,9 +740,6 @@ UI.CreateToggle(TabAim, "Aimbot Toggle", aimEnabled, function(Value)
     aimEnabled = Value
     updateFOVCircle()
 end)
-UI.CreateToggle(TabAim, "FOV at Mouse", fovAtMouse, function(Value)
-    fovAtMouse = Value
-end)
 UI.CreateDropdown(TabAim, "Target Part", {{name="Head",val="Head"},{name="HumanoidRootPart",val="HumanoidRootPart"}}, 1, function(Option)
     aimPart = Option
 end)
@@ -742,6 +752,9 @@ end)
 UI.CreateSlider(TabAim, "FOV Size", 50, 500, fovSize, function(v) return tostring(math.floor(v)) end, function(Value)
     fovSize = Value
     updateFOVCircle()
+end)
+UI.CreateToggle(TabAim, "Center FOV", centerFovEnabled, function(Value)
+    centerFovEnabled = Value
 end)
 
 UI.CreateToggle(TabSilent, "Silent Aim Toggle", silentAimEnabled, function(Value)
