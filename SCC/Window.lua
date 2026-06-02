@@ -21,6 +21,8 @@ function Window.new(options)
     local toggleText = options.ToggleText or "UI"
     local windowSize = options.Size or UDim2.new(0, 600, 0, 380)
     
+    local self = {}
+    
     local gui = Instance.new("ScreenGui")
     gui.Name = options.GuiName or "UniversalUILib"
     gui.ResetOnSpawn = false
@@ -448,18 +450,16 @@ function Window.new(options)
 
     Drag.makeDraggable(frmMain)
     
-    local self = {
-        gui = gui,
-        mainFrame = frmMain,
-        leftPanel = leftPanel,
-        rightPanel = rightPanel,
-        tabContainer = tabCont,
-        theme = Theme,
-        show = openWindow,
-        destroy = function()
-            gui:Destroy()
-        end
-    }
+    self.gui = gui
+    self.mainFrame = frmMain
+    self.leftPanel = leftPanel
+    self.rightPanel = rightPanel
+    self.tabContainer = tabCont
+    self.theme = Theme
+    self.show = openWindow
+    self.destroy = function()
+        gui:Destroy()
+    end
     
     return self
 end
