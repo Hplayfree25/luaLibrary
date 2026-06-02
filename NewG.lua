@@ -703,9 +703,9 @@ local Window = UI.CreateWindow({
 task.spawn(function()
     task.wait(1)
     UI.Notify({
-        Title = "UI Tersembunyi (Hidden)",
-        Content = "Tekan tombol 'Alt' (Left Alt) di keyboard untuk membuka menu. Tombol bulat NMZ di layar ditujukan khusus untuk pengguna Mobile.",
-        Duration = 10
+        Title = "UI Loaded",
+        Content = "Press 'Left Alt' on your keyboard to open or close the menu.",
+        Duration = 7
     })
 end)
 
