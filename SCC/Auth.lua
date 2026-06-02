@@ -32,13 +32,18 @@ function Auth.show(config)
     overlay.Parent = gui
 
     local main = Instance.new("Frame")
-    main.Size = UDim2.new(0, 0, 0, 0)
+    main.Size = UDim2.new(0, 320, 0, 0)
     main.Position = UDim2.new(0.5, 0, 0.5, 0)
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.BackgroundColor3 = Theme.Background
     main.BackgroundTransparency = Theme.BackgroundTransparency
     main.ClipsDescendants = true
+    main.AutomaticSize = Enum.AutomaticSize.Y
     main.Parent = gui
+
+    local scale = Instance.new("UIScale")
+    scale.Scale = 0
+    scale.Parent = main
 
     local stroke = Instance.new("UIStroke")
     stroke.Color = Theme.Accent
@@ -49,21 +54,31 @@ function Auth.show(config)
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = main
+    
+    local mainLayout = Instance.new("UIListLayout")
+    mainLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    mainLayout.Padding = UDim.new(0, 10)
+    mainLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    mainLayout.Parent = main
+    
+    local mainPad = Instance.new("UIPadding")
+    mainPad.PaddingTop = UDim.new(0, 20)
+    mainPad.PaddingBottom = UDim.new(0, 20)
+    mainPad.Parent = main
 
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, -40, 0, 30)
-    title.Position = UDim2.new(0, 20, 0, 20)
+    title.Size = UDim2.new(1, -40, 0, 25)
     title.BackgroundTransparency = 1
     title.Text = titleText
     title.TextColor3 = Theme.TextPrimary
     title.Font = Theme.FontBold
     title.TextSize = 18
     title.TextXAlignment = Enum.TextXAlignment.Left
+    title.LayoutOrder = 1
     title.Parent = main
 
     local subtitle = Instance.new("TextLabel")
-    subtitle.Size = UDim2.new(1, -40, 0, 20)
-    subtitle.Position = UDim2.new(0, 20, 0, 50)
+    subtitle.Size = UDim2.new(1, -40, 0, 15)
     subtitle.BackgroundTransparency = 1
     subtitle.Text = subtitleText
     subtitle.TextColor3 = Theme.TextSecondary
@@ -71,12 +86,13 @@ function Auth.show(config)
     subtitle.TextSize = 13
     subtitle.TextWrapped = true
     subtitle.TextXAlignment = Enum.TextXAlignment.Left
+    subtitle.LayoutOrder = 2
     subtitle.Parent = main
 
     local inputContainer = Instance.new("Frame")
-    inputContainer.Size = UDim2.new(1, -40, 0, 45)
-    inputContainer.Position = UDim2.new(0, 20, 0, 85)
+    inputContainer.Size = UDim2.new(1, -40, 0, 40)
     inputContainer.BackgroundColor3 = Theme.PanelBackground
+    inputContainer.LayoutOrder = 3
     inputContainer.Parent = main
     
     local inputCorner = Instance.new("UICorner")
@@ -103,22 +119,15 @@ function Auth.show(config)
     textBox.ClearTextOnFocus = false
     textBox.Parent = inputContainer
 
-    textBox.Focused:Connect(function()
-        ts:Create(inputStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {Transparency = 0}):Play()
-    end)
-    textBox.FocusLost:Connect(function()
-        ts:Create(inputStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {Transparency = 0.9}):Play()
-    end)
-
     local submitBtn = Instance.new("TextButton")
     submitBtn.Size = UDim2.new(1, -40, 0, 40)
-    submitBtn.Position = UDim2.new(0, 20, 0, 145)
     submitBtn.BackgroundColor3 = Theme.Accent
     submitBtn.Text = submitText
     submitBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
     submitBtn.Font = Theme.FontBold
     submitBtn.TextSize = 14
     submitBtn.AutoButtonColor = false
+    submitBtn.LayoutOrder = 4
     submitBtn.Parent = main
 
     local btnCorner = Instance.new("UICorner")
@@ -132,60 +141,56 @@ function Auth.show(config)
         ts:Create(submitBtn, TweenInfo.new(0.2), {BackgroundColor3 = Theme.Accent}):Play()
     end)
 
-    local linkContainer = Instance.new("Frame")
-    linkContainer.Size = UDim2.new(1, -40, 0, 20)
-    linkContainer.Position = UDim2.new(0, 20, 0, 200)
-    linkContainer.BackgroundTransparency = 1
-    linkContainer.Parent = main
-    
-    local linkLayout = Instance.new("UIListLayout")
-    linkLayout.FillDirection = Enum.FillDirection.Horizontal
-    linkLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-    linkLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    linkLayout.Padding = UDim.new(0, 15)
-    linkLayout.Parent = linkContainer
-    
-    for i, linkData in ipairs(links) do
-        local linkBtn = Instance.new("TextButton")
-        linkBtn.Size = UDim2.new(0, 80, 1, 0)
-        linkBtn.BackgroundTransparency = 1
-        linkBtn.Text = linkData.Name or "Link"
-        linkBtn.TextColor3 = Theme.TextSecondary
-        linkBtn.Font = Theme.FontMedium
-        linkBtn.TextSize = 12
-        linkBtn.Parent = linkContainer
+    if #links > 0 then
+        local linkContainer = Instance.new("Frame")
+        linkContainer.Size = UDim2.new(1, -40, 0, 20)
+        linkContainer.BackgroundTransparency = 1
+        linkContainer.LayoutOrder = 5
+        linkContainer.Parent = main
         
-        linkBtn.MouseEnter:Connect(function()
-            ts:Create(linkBtn, TweenInfo.new(0.2), {TextColor3 = Theme.TextPrimary}):Play()
-        end)
-        linkBtn.MouseLeave:Connect(function()
-            ts:Create(linkBtn, TweenInfo.new(0.2), {TextColor3 = Theme.TextSecondary}):Play()
-        end)
+        local linkLayout = Instance.new("UIListLayout")
+        linkLayout.FillDirection = Enum.FillDirection.Horizontal
+        linkLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+        linkLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        linkLayout.Padding = UDim.new(0, 15)
+        linkLayout.Parent = linkContainer
         
-        linkBtn.MouseButton1Click:Connect(function()
-            if linkData.OnClick then
-                linkData.OnClick()
-            end
-        end)
+        for i, linkData in ipairs(links) do
+            local linkBtn = Instance.new("TextButton")
+            linkBtn.Size = UDim2.new(0, 80, 1, 0)
+            linkBtn.BackgroundTransparency = 1
+            linkBtn.Text = linkData.Name or "Link"
+            linkBtn.TextColor3 = Theme.TextSecondary
+            linkBtn.Font = Theme.FontMedium
+            linkBtn.TextSize = 12
+            linkBtn.Parent = linkContainer
+            
+            linkBtn.MouseEnter:Connect(function()
+                ts:Create(linkBtn, TweenInfo.new(0.2), {TextColor3 = Theme.TextPrimary}):Play()
+            end)
+            linkBtn.MouseLeave:Connect(function()
+                ts:Create(linkBtn, TweenInfo.new(0.2), {TextColor3 = Theme.TextSecondary}):Play()
+            end)
+            
+            linkBtn.MouseButton1Click:Connect(function()
+                if linkData.OnClick then
+                    linkData.OnClick()
+                end
+            end)
+        end
     end
-
-    ts:Create(overlay, TweenInfo.new(0.5), {BackgroundTransparency = 0.3}):Play()
-    local targetHeight = #links > 0 and 240 or 210
-    ts:Create(main, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.new(0, 320, 0, targetHeight)}):Play()
-    
-    Drag.makeDraggable(main)
 
     local isLoading = false
     
     local function closeAuth()
         ts:Create(overlay, TweenInfo.new(0.4), {BackgroundTransparency = 1}):Play()
-        local t = ts:Create(main, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Size = UDim2.new(0, 0, 0, 0)})
+        local t = ts:Create(scale, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Scale = 0})
         t:Play()
         t.Completed:Wait()
         gui:Destroy()
     end
 
-    submitBtn.MouseButton1Click:Connect(function()
+    local function doSubmit()
         if isLoading then return end
         local key = textBox.Text
         
@@ -213,7 +218,24 @@ function Auth.show(config)
         else
             closeAuth()
         end
+    end
+
+    submitBtn.MouseButton1Click:Connect(doSubmit)
+
+    textBox.Focused:Connect(function()
+        ts:Create(inputStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {Transparency = 0}):Play()
     end)
+    textBox.FocusLost:Connect(function(enterPressed)
+        ts:Create(inputStroke, TweenInfo.new(0.3, Enum.EasingStyle.Quart), {Transparency = 0.9}):Play()
+        if enterPressed then
+            doSubmit()
+        end
+    end)
+
+    ts:Create(overlay, TweenInfo.new(0.5), {BackgroundTransparency = 0.3}):Play()
+    ts:Create(scale, TweenInfo.new(0.6, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1}):Play()
+    
+    Drag.makeDraggable(main)
 
     return {
         Close = closeAuth
