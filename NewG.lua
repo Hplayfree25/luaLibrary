@@ -814,13 +814,13 @@ UI.CreateToggle(TabSilent, "Wall Check", wallCheckEnabled, function(Value)
     wallCheckEnabled = Value
 end)
 
+UI.CreateLabel(TabGun, "⚠️ Note: Fast Bolt & No Recoil may be unstable on Solara")
 UI.CreateToggle(TabGun, "No Recoil", noRecoilEnabled, function(Value)
     noRecoilEnabled = Value
 end)
 UI.CreateToggle(TabGun, "No Spread", noSpreadEnabled, function(Value)
     noSpreadEnabled = Value
 end)
-UI.CreateLabel(TabGun, "⚠️ Note: Fast Bolt & No Recoil may be unstable on Solara")
 UI.CreateToggle(TabGun, "Fast Bolt", fastBoltEnabled, function(Value)
     fastBoltEnabled = Value
 end)

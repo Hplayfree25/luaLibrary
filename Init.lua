@@ -1253,7 +1253,8 @@ _modules["Label"] = (function()
         local desc = type(text) == "table" and (text.Desc or text[2]) or nil
     
         local frm = Instance.new("Frame")
-        frm.Size = UDim2.new(1, 0, 0, desc and 48 or 36)
+        frm.Size = UDim2.new(1, 0, 0, 0)
+        frm.AutomaticSize = Enum.AutomaticSize.Y
         frm.BackgroundColor3 = Theme.PanelBackground
         frm.BackgroundTransparency = Theme.PanelTransparency
         frm.Parent = parent
@@ -1267,22 +1268,38 @@ _modules["Label"] = (function()
         s.Transparency = Theme.PanelStrokeTransparency
         s.Parent = frm
         
+        local layout = Instance.new("UIListLayout")
+        layout.FillDirection = Enum.FillDirection.Vertical
+        layout.SortOrder = Enum.SortOrder.LayoutOrder
+        layout.Padding = UDim.new(0, 4)
+        layout.Parent = frm
+        
+        local pad = Instance.new("UIPadding")
+        pad.PaddingTop = UDim.new(0, 10)
+        pad.PaddingBottom = UDim.new(0, 10)
+        pad.PaddingLeft = UDim.new(0, 12)
+        pad.PaddingRight = UDim.new(0, 12)
+        pad.Parent = frm
+        
         local lbl = Instance.new("TextLabel")
-        lbl.Size = desc and UDim2.new(1, -24, 0, 16) or UDim2.new(1, -24, 1, 0)
-        lbl.Position = desc and UDim2.new(0, 12, 0, 8) or UDim2.new(0, 12, 0, 0)
+        lbl.Size = UDim2.new(1, 0, 0, 0)
+        lbl.AutomaticSize = Enum.AutomaticSize.Y
         lbl.BackgroundTransparency = 1
         lbl.Text = title
         lbl.TextColor3 = Theme.TextPrimary
         lbl.Font = Theme.FontMedium
         lbl.TextSize = 13
         lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.TextYAlignment = Enum.TextYAlignment.Top
+        lbl.TextWrapped = true
+        lbl.LayoutOrder = 1
         lbl.Parent = frm
         
         local lblDesc
         if desc then
             lblDesc = Instance.new("TextLabel")
-            lblDesc.Size = UDim2.new(1, -24, 0, 14)
-            lblDesc.Position = UDim2.new(0, 12, 0, 26)
+            lblDesc.Size = UDim2.new(1, 0, 0, 0)
+            lblDesc.AutomaticSize = Enum.AutomaticSize.Y
             lblDesc.BackgroundTransparency = 1
             lblDesc.Text = desc
             lblDesc.TextColor3 = Theme.TextSecondary
@@ -1290,6 +1307,9 @@ _modules["Label"] = (function()
             lblDesc.Font = Theme.FontMedium
             lblDesc.TextSize = 11
             lblDesc.TextXAlignment = Enum.TextXAlignment.Left
+            lblDesc.TextYAlignment = Enum.TextYAlignment.Top
+            lblDesc.TextWrapped = true
+            lblDesc.LayoutOrder = 2
             lblDesc.Parent = frm
         end
     
