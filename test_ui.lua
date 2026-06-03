@@ -13,11 +13,6 @@ local Window = UI.CreateWindow({
     Keybind = Enum.KeyCode.RightControl, -- Contoh kustomisasi keybind
     Size = UDim2.new(0, 500, 0, 300),
     HideOnStartup = true,
-    Profile = {
-        Name = "Faldloudnd",
-        Bio = "Advanced Scripter",
-        Image = "rbxassetid://14800392398" -- Contoh icon discord/user
-    },
     OnIntroCompleted = function(win)
         UI.CreateAuth({
             Title = "Faldloudnd's App",

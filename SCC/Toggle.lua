@@ -10,10 +10,13 @@ local Theme = import("Theme")
 local Utils = import("Utils")
 
 function Toggle.new(parent, name, defaultState, cb)
+    local text = type(name) == "table" and (name.Name or name[1]) or name
+    local desc = type(name) == "table" and (name.Desc or name[2]) or nil
+
     local stateVal = defaultState or false
     
     local frm = Instance.new("Frame")
-    frm.Size = UDim2.new(1, 0, 0, 36)
+    frm.Size = UDim2.new(1, 0, 0, desc and 48 or 36)
     frm.BackgroundColor3 = Theme.PanelBackground
     frm.BackgroundTransparency = Theme.PanelTransparency
     frm.Parent = parent
@@ -26,15 +29,29 @@ function Toggle.new(parent, name, defaultState, cb)
     s.Parent = frm
     
     local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(0.7, 0, 1, 0)
-    lbl.Position = UDim2.new(0, 12, 0, 0)
+    lbl.Size = desc and UDim2.new(0.7, 0, 0, 16) or UDim2.new(0.7, 0, 1, 0)
+    lbl.Position = desc and UDim2.new(0, 12, 0, 8) or UDim2.new(0, 12, 0, 0)
     lbl.BackgroundTransparency = 1
-    lbl.Text = name
+    lbl.Text = text
     lbl.TextColor3 = Theme.TextSecondary
     lbl.Font = Theme.FontMedium
     lbl.TextSize = 12
     lbl.TextXAlignment = Enum.TextXAlignment.Left
     lbl.Parent = frm
+    
+    if desc then
+        local lblDesc = Instance.new("TextLabel")
+        lblDesc.Size = UDim2.new(0.7, 0, 0, 14)
+        lblDesc.Position = UDim2.new(0, 12, 0, 26)
+        lblDesc.BackgroundTransparency = 1
+        lblDesc.Text = desc
+        lblDesc.TextColor3 = Theme.TextSecondary
+        lblDesc.TextTransparency = 0.4
+        lblDesc.Font = Theme.FontMedium
+        lblDesc.TextSize = 11
+        lblDesc.TextXAlignment = Enum.TextXAlignment.Left
+        lblDesc.Parent = frm
+    end
     
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 34, 0, 18)

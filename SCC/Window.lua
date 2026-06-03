@@ -135,11 +135,8 @@ function Window.new(options)
     })
     gradTitle.Parent = lblTitle
 
-    local hasProfile = type(options.Profile) == "table"
-    local tabHeightOffset = hasProfile and -130 or -60
-
     local tabCont = Instance.new("Frame")
-    tabCont.Size = UDim2.new(1, 0, 1, tabHeightOffset)
+    tabCont.Size = UDim2.new(1, 0, 1, -60)
     tabCont.Position = UDim2.new(0, 0, 0, 60)
     tabCont.BackgroundTransparency = 1
     tabCont.Parent = leftPanel
@@ -150,62 +147,6 @@ function Window.new(options)
     tl1.SortOrder = Enum.SortOrder.LayoutOrder
     tl1.Padding = UDim.new(0, 6)
     tl1.Parent = tabCont
-
-    if hasProfile then
-        local pData = options.Profile
-        local pName = pData.Name or "Guest"
-        local pBio = pData.Bio or "User"
-        local pImage = pData.Image or "rbxassetid://10709772391" -- default avatar
-        
-        local profileCont = Instance.new("Frame")
-        profileCont.Size = UDim2.new(1, -20, 0, 50)
-        profileCont.Position = UDim2.new(0, 10, 1, -60)
-        profileCont.BackgroundColor3 = Theme.PanelBackground
-        profileCont.Parent = leftPanel
-        
-        local pCorner = Instance.new("UICorner")
-        pCorner.CornerRadius = UDim.new(0, 6)
-        pCorner.Parent = profileCont
-        
-        local pStroke = Instance.new("UIStroke")
-        pStroke.Color = Theme.Stroke
-        pStroke.Transparency = 0.8
-        pStroke.Parent = profileCont
-        
-        local pIcon = Instance.new("ImageLabel")
-        pIcon.Size = UDim2.new(0, 30, 0, 30)
-        pIcon.Position = UDim2.new(0, 10, 0.5, -15)
-        pIcon.BackgroundTransparency = 1
-        pIcon.Image = pImage
-        pIcon.ImageColor3 = pData.ImageColor or Color3.fromRGB(255, 255, 255)
-        pIcon.Parent = profileCont
-        
-        local pIconCorner = Instance.new("UICorner")
-        pIconCorner.CornerRadius = UDim.new(1, 0)
-        pIconCorner.Parent = pIcon
-        
-        local pNameLbl = Instance.new("TextLabel")
-        pNameLbl.Size = UDim2.new(1, -50, 0, 16)
-        pNameLbl.Position = UDim2.new(0, 48, 0, 10)
-        pNameLbl.BackgroundTransparency = 1
-        pNameLbl.Text = pName
-        pNameLbl.TextColor3 = Theme.TextPrimary
-        pNameLbl.Font = Theme.FontBold
-        pNameLbl.TextSize = 13
-        pNameLbl.TextXAlignment = Enum.TextXAlignment.Left
-        pNameLbl.Parent = profileCont
-        
-        local pBioLbl = Instance.new("TextLabel")
-        pBioLbl.Size = UDim2.new(1, -50, 0, 14)
-        pBioLbl.Position = UDim2.new(0, 48, 0, 26)
-        pBioLbl.BackgroundTransparency = 1
-        pBioLbl.Text = pBio
-        pBioLbl.TextColor3 = Theme.TextSecondary
-        pBioLbl.Font = Theme.FontMedium
-        pBioLbl.TextSize = 11
-        pBioLbl.TextXAlignment = Enum.TextXAlignment.Left
-        pBioLbl.Parent = profileCont
-    end
 
     -- Loading Card Intro - initially hidden
     local introFrame = Instance.new("Frame")
