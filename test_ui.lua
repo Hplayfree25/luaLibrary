@@ -72,6 +72,9 @@ end
 local Tab1 = UI.CreateTab(Window, "MAIN", 1)
 local Tab2 = UI.CreateTab(Window, "SETTINGS", 2)
 
+UI.CreateLabel(Tab1, "Ini adalah Label Biasa")
+UI.CreateLabel(Tab1, {Name = "Informasi Tambahan", Desc = "Label ini mendukung deskripsi juga lho!"})
+
 UI.CreateToggle(Tab1, {Name = "Test Toggle", Desc = "Ini adalah contoh deskripsi toggle"}, true, function(state)
     print("Toggle state changed to:", state)
 end)

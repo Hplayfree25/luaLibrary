@@ -81,8 +81,8 @@ local scriptUnloadedLocal = false
 local success, wm = pcall(require, ReplicatedStorage:WaitForChild("WeaponModule", 5))
 if success and wm and type(wm) == "table" then
     if rawget(wm, "Equip") then
-        local oldEquip
-        oldEquip = clonefunction(hookfunction(rawget(wm, "Equip"), newcclosure(function(data, action)
+        local oldEquip = rawget(wm, "Equip")
+        local newEquip = newcclosure(function(data, action)
             pcall(function()
                 if recoilThread then coroutine.close(recoilThread); recoilThread = nil end
                 if reloadConn then reloadConn:Disconnect(); reloadConn = nil end
@@ -137,13 +137,19 @@ if success and wm and type(wm) == "table" then
                 end
             end)
             return oldEquip(data, action)
-        end)))
+        end)
+        if isExecutorSupported then
+            oldEquip = clonefunction(hookfunction(rawget(wm, "Equip"), newEquip))
+        else
+            rawset(wm, "Equip", newEquip)
+        end
     end
 
     if rawget(wm, "Cycle") or rawget(wm, "boltCycleAction") then
         local targetFunc = rawget(wm, "boltCycleAction") or rawget(wm, "Cycle")
-        local oldCycle
-        oldCycle = clonefunction(hookfunction(targetFunc, newcclosure(function(data, ...)
+        local targetName = rawget(wm, "boltCycleAction") and "boltCycleAction" or "Cycle"
+        local oldCycle = targetFunc
+        local newCycle = newcclosure(function(data, ...)
             if fastBoltEnabled then
                 if type(data) == "table" then
                     data.Cycle = false
@@ -160,7 +166,12 @@ if success and wm and type(wm) == "table" then
                 return
             end
             return oldCycle(data, ...)
-        end)))
+        end)
+        if isExecutorSupported then
+            oldCycle = clonefunction(hookfunction(targetFunc, newCycle))
+        else
+            rawset(wm, targetName, newCycle)
+        end
     end
 
     LocalPlayer.CharacterAdded:Connect(function()
@@ -783,6 +794,7 @@ UI.CreateToggle(TabAim, "Center FOV", centerFovEnabled, function(Value)
     centerFovEnabled = Value
 end)
 
+UI.CreateLabel(TabSilent, "⚠️ Note: Silent Aim & Wall Check may be unstable on Solara")
 UI.CreateToggle(TabSilent, "Silent Aim Toggle", silentAimEnabled, function(Value)
     silentAimEnabled = Value
 end)
@@ -808,6 +820,7 @@ end)
 UI.CreateToggle(TabGun, "No Spread", noSpreadEnabled, function(Value)
     noSpreadEnabled = Value
 end)
+UI.CreateLabel(TabGun, "⚠️ Note: Fast Bolt & No Recoil may be unstable on Solara")
 UI.CreateToggle(TabGun, "Fast Bolt", fastBoltEnabled, function(Value)
     fastBoltEnabled = Value
 end)
@@ -867,6 +880,7 @@ UI.CreateButton(TabMisc, "Boost FPS (Smooth)", function()
         Terrain.WaterTransparency = 0
     end)
 end)
+UI.CreateLabel(TabMisc, "Script Version: V1.5")
 UI.CreateButton(TabMisc, "Unload Script", function()
     if getGenv()[scriptId] then getGenv()[scriptId]() end
 end)
@@ -889,8 +903,8 @@ if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
                 if type(v) == "function" then
                     local n = debug.info(v, "n")
                     if n == "Crosshair" or n == "bulletMagnetism" then
-                        local oldShootFn
-                        oldShootFn = clonefunction(hookfunction(rawget(getfenv(anon), k), newcclosure(function(...)
+                        local oldShootFn = rawget(getfenv(anon), k)
+                        local newShootFn = newcclosure(function(...)
                             if silentAimEnabled then
                                 local ok, res = pcall(function()
                                     local c, bestPos = getClosestSilentEnemy()
@@ -956,7 +970,12 @@ if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
                             end
                             
                             return oldShootFn(...)
-                        end)))
+                        end)
+                        if isExecutorSupported then
+                            oldShootFn = clonefunction(hookfunction(rawget(getfenv(anon), k), newShootFn))
+                        else
+                            rawset(getfenv(anon), k, newShootFn)
+                        end
                     end
                 end
             end
@@ -971,7 +990,7 @@ if not isExecutorSupported then
         task.wait(1.5)
         UI.Notify({
             Title = "Executor Not Supported",
-            Content = "Your executor lacks UNC support (hookfunction). Advanced features like Aimbot & Fast Bolt will NOT work!",
+            Content = "Unsupported Executor. Aimbot, Silent Aim, Fast Bolt, and No Recoil will NOT work.",
             Duration = 5
         })
     end)

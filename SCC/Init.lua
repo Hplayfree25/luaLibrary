@@ -69,6 +69,10 @@ function Lib.CreateTextbox(tab, name, placeholderText, cb)
     return Lib.Components.Textbox.new(tab.container, name, placeholderText, cb)
 end
 
+function Lib.CreateLabel(tab, name)
+    return Lib.Components.Label.new(tab.container, name)
+end
+
 function Lib.Notify(config)
     return Lib.Notification.show(config)
 end
