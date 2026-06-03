@@ -794,7 +794,7 @@ UI.CreateToggle(TabAim, "Center FOV", centerFovEnabled, function(Value)
     centerFovEnabled = Value
 end)
 
-UI.CreateLabel(TabSilent, "⚠️ Note: Silent Aim & Wall Check may be unstable on Solara")
+UI.CreateLabel(TabSilent, "⚠️ Note: Silent Aim & Wall Check may be unstable on Solara and Xeno")
 UI.CreateToggle(TabSilent, "Silent Aim Toggle", silentAimEnabled, function(Value)
     silentAimEnabled = Value
 end)
@@ -814,7 +814,7 @@ UI.CreateToggle(TabSilent, "Wall Check", wallCheckEnabled, function(Value)
     wallCheckEnabled = Value
 end)
 
-UI.CreateLabel(TabGun, "⚠️ Note: Fast Bolt & No Recoil may be unstable on Solara")
+UI.CreateLabel(TabGun, "⚠️ Note: Fast Bolt & No Recoil may be unstable on Solara and Xeno")
 UI.CreateToggle(TabGun, "No Recoil", noRecoilEnabled, function(Value)
     noRecoilEnabled = Value
 end)
@@ -880,10 +880,10 @@ UI.CreateButton(TabMisc, "Boost FPS (Smooth)", function()
         Terrain.WaterTransparency = 0
     end)
 end)
-UI.CreateLabel(TabMisc, "Script Version: V1.5")
 UI.CreateButton(TabMisc, "Unload Script", function()
     if getGenv()[scriptId] then getGenv()[scriptId]() end
 end)
+UI.CreateLabel(TabMisc, "Script Version: V1.5")
 
 refreshESP()
 
