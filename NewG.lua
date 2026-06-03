@@ -70,7 +70,7 @@ local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
 local noRecoilEnabled = true
 local noSpreadEnabled = true
 local fastBoltEnabled = true
-local silentAimEnabled = true
+local silentAimEnabled = false
 
 local recoilThread = nil
 local currentVelocity = nil
@@ -206,7 +206,6 @@ local originalSizes = {}
 
 local antiAfkEnabled = false
 local antiAfkConnection = nil
-local boostFpsEnabled = false
 
 local scriptUnloaded = false
 
@@ -557,7 +556,7 @@ local function fireClick()
             local vim = cloneref(game:GetService("VirtualInputManager"))
             local pos = UserInputService:GetMouseLocation()
             vim:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
-            task.wait(0.01)
+            task.wait(0.035) -- Slightly longer hold to ensure the game registers the click
             vim:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
         end)
     end)
@@ -581,17 +580,27 @@ RunService.RenderStepped:Connect(function()
     end
 
     if triggerbotEnabled and tick() - lastTriggerTime > triggerCooldown then
-        local mouseTarget = Mouse.Target
-        if mouseTarget then
-            for _, plr in pairs(Players:GetPlayers()) do
-                if plr ~= LocalPlayer and plr.Character then
-                    local humanoid = plr.Character:FindFirstChildOfClass("Humanoid")
-                    if humanoid and humanoid.Health > 0 and (not LocalPlayer.Team or plr.Team ~= LocalPlayer.Team) then
-                        if mouseTarget:IsDescendantOf(plr.Character) then
-                            lastTriggerTime = tick()
-                            fireClick()
-                            break
-                        end
+        local rayParams = RaycastParams.new()
+        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+        if LocalPlayer.Character then
+            rayParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
+        else
+            rayParams.FilterDescendantsInstances = {Camera}
+        end
+        
+        local mousePos = UserInputService:GetMouseLocation()
+        local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
+        local hit = workspace:Raycast(ray.Origin, ray.Direction * 1500, rayParams)
+        
+        if hit and hit.Instance then
+            local model = hit.Instance:FindFirstAncestorOfClass("Model")
+            if model then
+                local plr = Players:GetPlayerFromCharacter(model)
+                if plr and plr ~= LocalPlayer and plr.Team ~= LocalPlayer.Team then
+                    local humanoid = model:FindFirstChildOfClass("Humanoid")
+                    if humanoid and humanoid.Health > 0 then
+                        lastTriggerTime = tick()
+                        fireClick()
                     end
                 end
             end
@@ -832,8 +841,6 @@ UI.CreateButton(TabMisc, "Server Hop", function()
     end
 end)
 UI.CreateButton(TabMisc, "Boost FPS (Smooth)", function()
-    if boostFpsEnabled then return end
-    boostFpsEnabled = true
     pcall(function()
         local Lighting = game:GetService("Lighting")
         Lighting.GlobalShadows = false
@@ -886,15 +893,15 @@ if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
                         oldShootFn = clonefunction(hookfunction(rawget(getfenv(anon), k), newcclosure(function(...)
                             if silentAimEnabled then
                                 local ok, res = pcall(function()
-                                    local c, _ = getClosestSilentEnemy()
+                                    local c, bestPos = getClosestSilentEnemy()
                                     if c and currentVelocity and currentTool and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") then
-                                        local pos = c.Position
+                                        local pos = bestPos or c.Position
                                         local tVel = c.AssemblyLinearVelocity or c.Velocity or Vector3.new()
                                         
                                         local r = pos - LocalPlayer.Character.Head.Position
                                         local vVec = tVel - (LocalPlayer.Character.Head.AssemblyLinearVelocity or LocalPlayer.Character.Head.Velocity or Vector3.new())
                                         
-                                        local a = vVec:Dot(vVec) - currentVelocity * currentVelocity
+                                        local a = vVec:Dot(vVec) - (currentVelocity * currentVelocity)
                                         local b = 2 * r:Dot(vVec)
                                         local c0 = r:Dot(r)
                                         
