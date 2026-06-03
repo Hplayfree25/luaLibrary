@@ -72,7 +72,7 @@ end
 local Tab1 = UI.CreateTab(Window, "MAIN", 1)
 local Tab2 = UI.CreateTab(Window, "SETTINGS", 2)
 
-UI.CreateToggle(Tab1, "Test Toggle", true, function(state)
+UI.CreateToggle(Tab1, {Name = "Test Toggle", Desc = "Ini adalah contoh deskripsi toggle"}, true, function(state)
     print("Toggle state changed to:", state)
 end)
 
@@ -92,7 +92,7 @@ UI.CreateTextbox(Tab2, "Test Textbox", "Type something...", function(text, enter
     print("Textbox text changed to:", text, "| Enter pressed:", enterPressed)
 end)
 
-UI.CreateButton(Tab2, "Send Test Notification", function()
+UI.CreateButton(Tab2, {Name = "Send Test Notification", Desc = "Munculkan notif percobaan"}, function()
     UI.Notify("Universal UI", "This is a clean, modern notification toast!", 4)
 end)
 
