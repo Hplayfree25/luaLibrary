@@ -81,8 +81,18 @@ local scriptUnloadedLocal = false
 
 local success, wm = pcall(require, ReplicatedStorage:WaitForChild("WeaponModule", 5))
 if success and wm and type(wm) == "table" then
-    if rawget(wm, "Equip") then
-        local oldEquip = rawget(wm, "Equip")
+    if not getgenv().NMZ_Originals then
+        getgenv().NMZ_Originals = {
+            Equip = rawget(wm, "Equip"),
+            Cycle = rawget(wm, "Cycle"),
+            boltCycleAction = rawget(wm, "boltCycleAction"),
+            Reload = rawget(wm, "Reload"),
+            Shoot = rawget(wm, "Shoot")
+        }
+    end
+
+    if getgenv().NMZ_Originals.Equip then
+        local oldEquip = getgenv().NMZ_Originals.Equip
         local newEquip = newcclosure(function(data, action)
             pcall(function()
                 if recoilThread then coroutine.close(recoilThread); recoilThread = nil end
@@ -146,17 +156,12 @@ if success and wm and type(wm) == "table" then
             end)
             return oldEquip(data, action)
         end)
-        if isExecutorSupported then
-            oldEquip = clonefunction(hookfunction(rawget(wm, "Equip"), newEquip))
-        else
-            rawset(wm, "Equip", newEquip)
-        end
+        rawset(wm, "Equip", newEquip)
     end
 
-    if rawget(wm, "Cycle") or rawget(wm, "boltCycleAction") then
-        local targetFunc = rawget(wm, "boltCycleAction") or rawget(wm, "Cycle")
-        local targetName = rawget(wm, "boltCycleAction") and "boltCycleAction" or "Cycle"
-        local oldCycle = targetFunc
+    local targetName = rawget(wm, "boltCycleAction") and "boltCycleAction" or "Cycle"
+    if getgenv().NMZ_Originals[targetName] then
+        local oldCycle = getgenv().NMZ_Originals[targetName]
         local newCycle = newcclosure(function(data, ...)
             if fastBoltEnabled then
                 if type(data) == "table" then
@@ -175,15 +180,11 @@ if success and wm and type(wm) == "table" then
             end
             return oldCycle(data, ...)
         end)
-        if isExecutorSupported then
-            oldCycle = clonefunction(hookfunction(targetFunc, newCycle))
-        else
-            rawset(wm, targetName, newCycle)
-        end
+        rawset(wm, targetName, newCycle)
     end
 
-    if rawget(wm, "Reload") then
-        local oldReload = rawget(wm, "Reload")
+    if getgenv().NMZ_Originals.Reload then
+        local oldReload = getgenv().NMZ_Originals.Reload
         local newReload = newcclosure(function(data, ...)
             if silentReloadEnabled then
                 if type(data) == "table" and data.Tool then
@@ -200,15 +201,11 @@ if success and wm and type(wm) == "table" then
             end
             return oldReload(data, ...)
         end)
-        if isExecutorSupported then
-            oldReload = clonefunction(hookfunction(rawget(wm, "Reload"), newReload))
-        else
-            rawset(wm, "Reload", newReload)
-        end
+        rawset(wm, "Reload", newReload)
     end
 
-    if rawget(wm, "Shoot") then
-        local oldShoot = rawget(wm, "Shoot")
+    if getgenv().NMZ_Originals.Shoot then
+        local oldShoot = getgenv().NMZ_Originals.Shoot
         local newShoot = newcclosure(function(data, ...)
             if fastBoltEnabled and type(data) == "table" and data.Tool and data.Tool:GetAttribute("ToolType") == "Bolt Action" then
                 local toolName = data.Tool.Name
@@ -224,11 +221,7 @@ if success and wm and type(wm) == "table" then
             end
             return oldShoot(data, ...)
         end)
-        if isExecutorSupported then
-            oldShoot = clonefunction(hookfunction(rawget(wm, "Shoot"), newShoot))
-        else
-            rawset(wm, "Shoot", newShoot)
-        end
+        rawset(wm, "Shoot", newShoot)
     end
 
     LocalPlayer.CharacterAdded:Connect(function()
@@ -355,25 +348,64 @@ end
 LoadConfig()
 
 local fovCircle = nil
+local guiFov = nil
+local fovFrame = nil
+
 local function updateFOVCircle()
-    if Drawing and Drawing.new then
+    if false then -- Force GUI fallback for executors with fake Drawing APIs
         if not fovCircle then
-            fovCircle = Drawing.new("Circle")
-            fovCircle.NumSides = 64
+            local ok, res = pcall(function() return Drawing.new("Circle") end)
+            if ok and res then 
+                fovCircle = res 
+                fovCircle.NumSides = 64
+            else 
+                Drawing = nil
+                updateFOVCircle() 
+                return 
+            end
         end
-        fovCircle.Radius = fovSize
-        fovCircle.Thickness = 2
-        fovCircle.Color = fovColor
-        fovCircle.Visible = aimEnabled
+        pcall(function() fovCircle.Radius = fovSize end)
+        pcall(function() fovCircle.Thickness = 2 end)
+        pcall(function() fovCircle.Color = fovColor end)
+        pcall(function() fovCircle.Visible = aimEnabled end)
+        pcall(function() fovCircle.Transparency = 1; fovCircle.Filled = false end)
     else
-        if fovCircle then fovCircle.Visible = false end
+        if not guiFov then
+            guiFov = Instance.new("ScreenGui")
+            guiFov.Name = "NMZ_FOV"
+            guiFov.ResetOnSpawn = false
+            guiFov.IgnoreGuiInset = true
+            local parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+            pcall(function() if gethui then parent = gethui() else parent = game:GetService("CoreGui") end end)
+            guiFov.Parent = parent
+            
+            fovFrame = Instance.new("Frame")
+            fovFrame.Parent = guiFov
+            fovFrame.BackgroundTransparency = 1
+            fovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+            
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(1, 0)
+            corner.Parent = fovFrame
+            
+            local stroke = Instance.new("UIStroke")
+            stroke.Color = fovColor
+            stroke.Thickness = 2
+            stroke.Parent = fovFrame
+        end
+        fovFrame.Size = UDim2.new(0, fovSize * 2, 0, fovSize * 2)
+        local str = fovFrame:FindFirstChildOfClass("UIStroke")
+        if str then str.Color = fovColor end
+        fovFrame.Visible = aimEnabled
     end
 end
-if fovCircle then fovCircle:Remove() fovCircle = nil end
+updateFOVCircle()
 
 local predDot = nil
+local guiPredDot = nil
+local predDotFrame = nil
 local function updatePredDot(pos)
-    if Drawing and Drawing.new then
+    if false then -- Force GUI fallback
         if not predDot then
             predDot = Drawing.new("Circle")
             predDot.NumSides = 16
@@ -392,10 +424,37 @@ local function updatePredDot(pos)
         end
         predDot.Visible = false
     else
-        if predDot then predDot.Visible = false end
+        if not guiPredDot then
+            guiPredDot = Instance.new("ScreenGui")
+            guiPredDot.Name = "NMZ_PredDot"
+            guiPredDot.ResetOnSpawn = false
+            guiPredDot.IgnoreGuiInset = true
+            local parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+            pcall(function() if gethui then parent = gethui() else parent = game:GetService("CoreGui") end end)
+            guiPredDot.Parent = parent
+            
+            predDotFrame = Instance.new("Frame")
+            predDotFrame.Parent = guiPredDot
+            predDotFrame.Size = UDim2.new(0, 4, 0, 4)
+            predDotFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+            predDotFrame.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            predDotFrame.BorderSizePixel = 0
+            
+            local corner = Instance.new("UICorner")
+            corner.CornerRadius = UDim.new(1, 0)
+            corner.Parent = predDotFrame
+        end
+        if pos then
+            local screenPos, onScreen = Camera:WorldToViewportPoint(pos)
+            if onScreen then
+                predDotFrame.Position = UDim2.new(0, screenPos.X, 0, screenPos.Y)
+                predDotFrame.Visible = true
+                return
+            end
+        end
+        if predDotFrame then predDotFrame.Visible = false end
     end
 end
-if predDot then predDot:Remove() predDot = nil end
 
 local function smartRaycast(origin, direction, ignoreListArray)
     local ignoreList = {}
@@ -749,12 +808,23 @@ RunService.RenderStepped:Connect(function()
     if scriptUnloaded then return end
 
     if fovCircle and fovCircle.Visible then
+        local pos
         if centerFovEnabled then
-            fovCircle.Position = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+            pos = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
         else
             local mousePos = UserInputService:GetMouseLocation()
-            fovCircle.Position = Vector2.new(mousePos.X, mousePos.Y)
+            pos = Vector2.new(mousePos.X, mousePos.Y)
         end
+        pcall(function() fovCircle.Position = pos end)
+    elseif fovFrame and fovFrame.Visible then
+        local pos
+        if centerFovEnabled then
+            pos = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        else
+            local mousePos = UserInputService:GetMouseLocation()
+            pos = Vector2.new(mousePos.X, mousePos.Y)
+        end
+        fovFrame.Position = UDim2.new(0, pos.X, 0, pos.Y)
     end
 
     updateBoxes()
