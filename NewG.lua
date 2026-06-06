@@ -70,6 +70,7 @@ local ReplicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
 local noRecoilEnabled = true
 local noSpreadEnabled = true
 local fastBoltEnabled = true
+local silentReloadEnabled = false
 local silentAimEnabled = false
 
 local recoilThread = nil
@@ -90,11 +91,18 @@ if success and wm and type(wm) == "table" then
                 if type(action) == "string" and action == "Equip" and type(data) == "table" and data.Tool then
                     currentTool = data.Tool
                     currentVelocity = data.Tool:GetAttribute("Velocity") or 500
+                    
+                    isBoltAction = false
+                    pcall(function()
+                        if data.animationList and data.animationList.boltCycleAnimation then
+                            isBoltAction = true
+                        end
+                    end)
 
                     if noRecoilEnabled then data.Tool:SetAttribute("Recoil", 0) end
                     if noSpreadEnabled then
                         data.Tool:SetAttribute("Spread", 0)
-                        data.Tool:SetAttribute("SpreadDefault", 0)
+                        data.Tool:SetAttribute("SpreadDefault", 99999999)
                         data.Tool:SetAttribute("MinSpread", 0)
                         data.Tool:SetAttribute("MaxSpread", 0)
                     end
@@ -110,11 +118,11 @@ if success and wm and type(wm) == "table" then
                                 end
                                 if noSpreadEnabled and data.Tool then
                                     data.Tool:SetAttribute("Spread", 0)
-                                    data.Tool:SetAttribute("SpreadDefault", 0)
+                                    data.Tool:SetAttribute("SpreadDefault", 99999999) 
                                     data.Tool:SetAttribute("MinSpread", 0)
                                     data.Tool:SetAttribute("MaxSpread", 0)
                                     local b = data.Tool:FindFirstChild("Bloom")
-                                    if b then b:Destroy() end
+                                    if b then b.Value = 0 end
                                 end
                                 if fastBoltEnabled then
                                     pcall(function()
@@ -174,6 +182,55 @@ if success and wm and type(wm) == "table" then
         end
     end
 
+    if rawget(wm, "Reload") then
+        local oldReload = rawget(wm, "Reload")
+        local newReload = newcclosure(function(data, ...)
+            if silentReloadEnabled then
+                if type(data) == "table" and data.Tool then
+                    task.spawn(function()
+                        pcall(function()
+                            local ServerEvents = ReplicatedStorage:FindFirstChild("ServerEvents")
+                            if ServerEvents and ServerEvents:FindFirstChild("Reload") then
+                                ServerEvents.Reload:InvokeServer(data)
+                            end
+                        end)
+                    end)
+                end
+                return
+            end
+            return oldReload(data, ...)
+        end)
+        if isExecutorSupported then
+            oldReload = clonefunction(hookfunction(rawget(wm, "Reload"), newReload))
+        else
+            rawset(wm, "Reload", newReload)
+        end
+    end
+
+    if rawget(wm, "Shoot") then
+        local oldShoot = rawget(wm, "Shoot")
+        local newShoot = newcclosure(function(data, ...)
+            if fastBoltEnabled and type(data) == "table" and data.Tool and data.Tool:GetAttribute("ToolType") == "Bolt Action" then
+                local toolName = data.Tool.Name
+                local delay = 1.3
+                if data.animationList and data.animationList.boltCycleAnimation then
+                    delay = data.animationList.boltCycleAnimation.Length
+                end
+                if not getgenv()._lastShotTime then getgenv()._lastShotTime = {} end
+                if getgenv()._lastShotTime[toolName] and tick() - getgenv()._lastShotTime[toolName] < delay then
+                    return -- Block ghost bullet
+                end
+                getgenv()._lastShotTime[toolName] = tick()
+            end
+            return oldShoot(data, ...)
+        end)
+        if isExecutorSupported then
+            oldShoot = clonefunction(hookfunction(rawget(wm, "Shoot"), newShoot))
+        else
+            rawset(wm, "Shoot", newShoot)
+        end
+    end
+
     LocalPlayer.CharacterAdded:Connect(function()
         pcall(function()
             if recoilThread then coroutine.close(recoilThread); recoilThread = nil end
@@ -210,6 +267,8 @@ local triggerbotEnabled = false
 local wallCheckEnabled = true
 local triggerCooldown = 0.05
 local lastTriggerTime = 0
+local isBoltAction = true
+local isHoldingTrigger = false
 
 local hitboxEnabled = false
 local hitboxMultiplier = 2.0
@@ -218,7 +277,82 @@ local originalSizes = {}
 local antiAfkEnabled = false
 local antiAfkConnection = nil
 
+local noParticlesEnabled = false
+local particleConnection = nil
+
 local scriptUnloaded = false
+
+local configFileName = "NMZ_Config.json"
+local HttpService = cloneref(game:GetService("HttpService"))
+
+local function SaveConfig()
+    local config = {
+        espEnabled = espEnabled,
+        espMode = espMode,
+        boxColorIndex = boxColorIndex,
+        aimEnabled = aimEnabled,
+        aimPart = aimPart,
+        fovSize = fovSize,
+        centerFovEnabled = centerFovEnabled,
+        aimModePC = aimModePC,
+        smoothness = smoothness,
+        silentAimDistance = silentAimDistance,
+        predEnabled = predEnabled,
+        predStrength = predStrength,
+        triggerbotEnabled = triggerbotEnabled,
+        wallCheckEnabled = wallCheckEnabled,
+        hitboxEnabled = hitboxEnabled,
+        hitboxMultiplier = hitboxMultiplier,
+        antiAfkEnabled = antiAfkEnabled,
+        noParticlesEnabled = noParticlesEnabled,
+        silentAimEnabled = silentAimEnabled,
+        noRecoilEnabled = noRecoilEnabled,
+        noSpreadEnabled = noSpreadEnabled,
+        fastBoltEnabled = fastBoltEnabled,
+        silentReloadEnabled = silentReloadEnabled
+    }
+    if writefile then
+        pcall(function()
+            writefile(configFileName, HttpService:JSONEncode(config))
+        end)
+    end
+end
+
+local function LoadConfig()
+    if isfile and readfile and isfile(configFileName) then
+        pcall(function()
+            local decoded = HttpService:JSONDecode(readfile(configFileName))
+            if decoded then
+                if decoded.espEnabled ~= nil then espEnabled = decoded.espEnabled end
+                if decoded.espMode ~= nil then espMode = decoded.espMode end
+                if decoded.boxColorIndex ~= nil then boxColorIndex = decoded.boxColorIndex end
+                if decoded.aimEnabled ~= nil then aimEnabled = decoded.aimEnabled end
+                if decoded.aimPart ~= nil then aimPart = decoded.aimPart end
+                if decoded.fovSize ~= nil then fovSize = decoded.fovSize end
+                if decoded.centerFovEnabled ~= nil then centerFovEnabled = decoded.centerFovEnabled end
+                if decoded.aimModePC ~= nil then aimModePC = decoded.aimModePC end
+                if decoded.smoothness ~= nil then smoothness = decoded.smoothness end
+                if decoded.silentAimDistance ~= nil then silentAimDistance = decoded.silentAimDistance end
+                if decoded.predEnabled ~= nil then predEnabled = decoded.predEnabled end
+                if decoded.predStrength ~= nil then predStrength = decoded.predStrength end
+                if decoded.triggerbotEnabled ~= nil then triggerbotEnabled = decoded.triggerbotEnabled end
+                if decoded.wallCheckEnabled ~= nil then wallCheckEnabled = decoded.wallCheckEnabled end
+                if decoded.hitboxEnabled ~= nil then hitboxEnabled = decoded.hitboxEnabled end
+                if decoded.hitboxMultiplier ~= nil then hitboxMultiplier = decoded.hitboxMultiplier end
+                if decoded.antiAfkEnabled ~= nil then antiAfkEnabled = decoded.antiAfkEnabled end
+                if decoded.noParticlesEnabled ~= nil then noParticlesEnabled = decoded.noParticlesEnabled end
+                if decoded.silentAimEnabled ~= nil then silentAimEnabled = decoded.silentAimEnabled end
+                if decoded.noRecoilEnabled ~= nil then noRecoilEnabled = decoded.noRecoilEnabled end
+                if decoded.noSpreadEnabled ~= nil then noSpreadEnabled = decoded.noSpreadEnabled end
+                if decoded.fastBoltEnabled ~= nil then fastBoltEnabled = decoded.fastBoltEnabled end
+                if decoded.silentReloadEnabled ~= nil then silentReloadEnabled = decoded.silentReloadEnabled end
+                
+                boxColor = boxColors[boxColorIndex] or Color3.new(1,1,1)
+            end
+        end)
+    end
+end
+LoadConfig()
 
 local fovCircle = nil
 local function updateFOVCircle()
@@ -263,13 +397,52 @@ local function updatePredDot(pos)
 end
 if predDot then predDot:Remove() predDot = nil end
 
-local function isPointVisible(pos, char)
-    local rayIgnore = {LocalPlayer.Character, char}
-    local obscuring = Camera:GetPartsObscuringTarget({pos}, rayIgnore)
-    for _, part in pairs(obscuring) do
-        if part.CanCollide and part.Transparency < 0.9 then
-            return false
+local function smartRaycast(origin, direction, ignoreListArray)
+    local ignoreList = {}
+    if ignoreListArray then for _, v in pairs(ignoreListArray) do table.insert(ignoreList, v) end end
+    local maxCasts = 15
+    
+    for i = 1, maxCasts do
+        local rayParams = RaycastParams.new()
+        rayParams.FilterType = Enum.RaycastFilterType.Exclude
+        rayParams.FilterDescendantsInstances = ignoreList
+        rayParams.IgnoreWater = true
+        
+        local hit = workspace:Raycast(origin, direction, rayParams)
+        if not hit then return nil end
+        
+        local part = hit.Instance
+        local isPenetratable = false
+        pcall(function()
+            local name = (part.Name or ""):lower()
+            if part.Transparency >= 0.9 or not part.CanCollide then isPenetratable = true end
+            local mat = part.Material
+            if mat == Enum.Material.Leaves or mat == Enum.Material.Fabric or mat == Enum.Material.ForceField then isPenetratable = true end
+            if name:match("bush") or name:match("leaf") or name:match("tree") or name:match("spawn") or name:match("sign") or name:match("grass") or name:match("water") then
+                isPenetratable = true
+            end
+        end)
+        
+        if isPenetratable then
+            table.insert(ignoreList, part)
+        else
+            return hit
         end
+    end
+    return nil
+end
+
+local function isPointVisible(pos, char)
+    local myChar = LocalPlayer.Character
+    if not myChar then return false end
+    
+    local origin = Camera.CFrame.Position
+    local direction = pos - origin
+    
+    local hit = smartRaycast(origin, direction, {myChar, char, Camera})
+    
+    if hit then
+        return false
     end
     return true
 end
@@ -590,19 +763,14 @@ RunService.RenderStepped:Connect(function()
         return 
     end
 
-    if triggerbotEnabled and tick() - lastTriggerTime > triggerCooldown then
-        local rayParams = RaycastParams.new()
-        rayParams.FilterType = Enum.RaycastFilterType.Exclude
-        if LocalPlayer.Character then
-            rayParams.FilterDescendantsInstances = {LocalPlayer.Character, Camera}
-        else
-            rayParams.FilterDescendantsInstances = {Camera}
-        end
-        
+    if triggerbotEnabled then
         local mousePos = UserInputService:GetMouseLocation()
         local ray = Camera:ViewportPointToRay(mousePos.X, mousePos.Y)
-        local hit = workspace:Raycast(ray.Origin, ray.Direction * 1500, rayParams)
+        local ignore = {Camera}
+        if LocalPlayer.Character then table.insert(ignore, LocalPlayer.Character) end
+        local hit = smartRaycast(ray.Origin, ray.Direction * 1500, ignore)
         
+        local targetInCrosshair = false
         if hit and hit.Instance then
             local model = hit.Instance:FindFirstAncestorOfClass("Model")
             if model then
@@ -610,12 +778,40 @@ RunService.RenderStepped:Connect(function()
                 if plr and plr ~= LocalPlayer and plr.Team ~= LocalPlayer.Team then
                     local humanoid = model:FindFirstChildOfClass("Humanoid")
                     if humanoid and humanoid.Health > 0 then
-                        lastTriggerTime = tick()
-                        fireClick()
+                        targetInCrosshair = true
                     end
                 end
             end
         end
+
+        if isBoltAction then
+            if targetInCrosshair and tick() - lastTriggerTime > triggerCooldown then
+                lastTriggerTime = tick()
+                fireClick()
+            end
+        else
+            if targetInCrosshair then
+                if not isHoldingTrigger then
+                    isHoldingTrigger = true
+                    pcall(function()
+                        cloneref(game:GetService("VirtualInputManager")):SendMouseButtonEvent(mousePos.X, mousePos.Y, 0, true, game, 1)
+                    end)
+                end
+            else
+                if isHoldingTrigger then
+                    isHoldingTrigger = false
+                    pcall(function()
+                        cloneref(game:GetService("VirtualInputManager")):SendMouseButtonEvent(mousePos.X, mousePos.Y, 0, false, game, 1)
+                    end)
+                end
+            end
+        end
+    elseif isHoldingTrigger then
+        isHoldingTrigger = false
+        pcall(function()
+            local mousePos = UserInputService:GetMouseLocation()
+            cloneref(game:GetService("VirtualInputManager")):SendMouseButtonEvent(mousePos.X, mousePos.Y, 0, false, game, 1)
+        end)
     end
 
     local keyPressed = false
@@ -739,6 +935,7 @@ getGenv()[scriptId] = function()
     removeAllBoxes()
     restoreAllHitboxes()
     if antiAfkConnection then antiAfkConnection:Disconnect(); antiAfkConnection = nil end
+    if particleConnection then particleConnection:Disconnect(); particleConnection = nil end
     if recoilThread then coroutine.close(recoilThread); recoilThread = nil end
     if reloadConn then reloadConn:Disconnect(); reloadConn = nil end
     getGenv()[scriptId] = nil
@@ -824,6 +1021,9 @@ end)
 UI.CreateToggle(TabGun, "Fast Bolt", fastBoltEnabled, function(Value)
     fastBoltEnabled = Value
 end)
+UI.CreateToggle(TabGun, "Silent Auto Reload", silentReloadEnabled, function(Value)
+    silentReloadEnabled = Value
+end)
 
 
 
@@ -836,6 +1036,10 @@ UI.CreateSlider(TabHitbox, "Hitbox Multiplier", 1, 5, hitboxMultiplier, function
     if hitboxEnabled then applyHitboxToAll() end
 end)
 
+UI.CreateButton(TabMisc, "Save Config", function()
+    SaveConfig()
+    UI.Notify({Title = "Config Saved", Content = "Your settings have been saved locally.", Duration = 3})
+end)
 UI.CreateToggle(TabMisc, "Anti-AFK", antiAfkEnabled, function(Value)
     antiAfkEnabled = Value
     toggleAntiAfk()
@@ -880,6 +1084,31 @@ UI.CreateButton(TabMisc, "Boost FPS (Smooth)", function()
         Terrain.WaterTransparency = 0
     end)
 end)
+UI.CreateToggle(TabMisc, "Anti-Particle (No Lag)", noParticlesEnabled, function(Value)
+    noParticlesEnabled = Value
+    if noParticlesEnabled then
+        local function isLaggy(obj)
+            return obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Explosion") or obj:IsA("Fire") or obj:IsA("Sparkles")
+        end
+        for _, v in pairs(workspace:GetDescendants()) do
+            if isLaggy(v) then
+                v:Destroy()
+            end
+        end
+        particleConnection = workspace.DescendantAdded:Connect(function(v)
+            if isLaggy(v) then
+                task.defer(function()
+                    if v and v.Parent then v:Destroy() end
+                end)
+            end
+        end)
+    else
+        if particleConnection then
+            particleConnection:Disconnect()
+            particleConnection = nil
+        end
+    end
+end)
 UI.CreateButton(TabMisc, "Unload Script", function()
     if getGenv()[scriptId] then getGenv()[scriptId]() end
 end)
@@ -905,6 +1134,17 @@ if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
                     if n == "Crosshair" or n == "bulletMagnetism" then
                         local oldShootFn = rawget(getfenv(anon), k)
                         local newShootFn = newcclosure(function(...)
+                            if noSpreadEnabled then
+                                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                                if hrp then
+                                    local oldALV = hrp.AssemblyLinearVelocity
+                                    hrp.AssemblyLinearVelocity = Vector3.zero
+                                    task.defer(function()
+                                        if hrp then hrp.AssemblyLinearVelocity = oldALV end
+                                    end)
+                                end
+                            end
+
                             if silentAimEnabled then
                                 local ok, res = pcall(function()
                                     local c, bestPos = getClosestSilentEnemy()
@@ -936,6 +1176,8 @@ if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
                                             
                                             if tVal then
                                                 local prediction = pos + tVel * tVal
+                                                local drop = 0.5 * workspace.Gravity * (tVal * tVal)
+                                                prediction = prediction + Vector3.new(0, drop, 0)
                                                 return prediction
                                             end
                                         end
