@@ -273,6 +273,9 @@ local antiAfkConnection = nil
 local noParticlesEnabled = false
 local particleConnection = nil
 
+local fullBrightEnabled = false
+local fullBrightConnection = nil
+
 local scriptUnloaded = false
 
 local configFileName = "NMZ_Config.json"
@@ -302,7 +305,8 @@ local function SaveConfig()
         noRecoilEnabled = noRecoilEnabled,
         noSpreadEnabled = noSpreadEnabled,
         fastBoltEnabled = fastBoltEnabled,
-        silentReloadEnabled = silentReloadEnabled
+        silentReloadEnabled = silentReloadEnabled,
+        fullBrightEnabled = fullBrightEnabled
     }
     if writefile then
         pcall(function()
@@ -339,6 +343,7 @@ local function LoadConfig()
                 if decoded.noSpreadEnabled ~= nil then noSpreadEnabled = decoded.noSpreadEnabled end
                 if decoded.fastBoltEnabled ~= nil then fastBoltEnabled = decoded.fastBoltEnabled end
                 if decoded.silentReloadEnabled ~= nil then silentReloadEnabled = decoded.silentReloadEnabled end
+                if decoded.fullBrightEnabled ~= nil then fullBrightEnabled = decoded.fullBrightEnabled end
                 
                 boxColor = boxColors[boxColorIndex] or Color3.new(1,1,1)
             end
@@ -377,6 +382,7 @@ local function updateFOVCircle()
             guiFov.IgnoreGuiInset = true
             local parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
             pcall(function() if gethui then parent = gethui() else parent = game:GetService("CoreGui") end end)
+            if parent:FindFirstChild("NMZ_FOV") then parent.NMZ_FOV:Destroy() end
             guiFov.Parent = parent
             
             fovFrame = Instance.new("Frame")
@@ -431,6 +437,7 @@ local function updatePredDot(pos)
             guiPredDot.IgnoreGuiInset = true
             local parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
             pcall(function() if gethui then parent = gethui() else parent = game:GetService("CoreGui") end end)
+            if parent:FindFirstChild("NMZ_PredDot") then parent.NMZ_PredDot:Destroy() end
             guiPredDot.Parent = parent
             
             predDotFrame = Instance.new("Frame")
@@ -1001,11 +1008,14 @@ getGenv()[scriptId] = function()
     if Window then Window.destroy() end
     if fovCircle then fovCircle:Remove() fovCircle = nil end
     if predDot then predDot:Remove() predDot = nil end
+    if guiFov then pcall(function() guiFov:Destroy() end) guiFov = nil end
+    if guiPredDot then pcall(function() guiPredDot:Destroy() end) guiPredDot = nil end
     removeAllHighlights()
     removeAllBoxes()
     restoreAllHitboxes()
     if antiAfkConnection then antiAfkConnection:Disconnect(); antiAfkConnection = nil end
     if particleConnection then particleConnection:Disconnect(); particleConnection = nil end
+    if fullBrightConnection then fullBrightConnection:Disconnect(); fullBrightConnection = nil end
     if recoilThread then coroutine.close(recoilThread); recoilThread = nil end
     if reloadConn then reloadConn:Disconnect(); reloadConn = nil end
     getGenv()[scriptId] = nil
@@ -1016,7 +1026,8 @@ local TabAim = UI.CreateTab(Window, "AIMBOT", 2)
 local TabSilent = UI.CreateTab(Window, "SILENT AIM", 3)
 local TabGun = UI.CreateTab(Window, "GUN MODS", 4)
 local TabHitbox = UI.CreateTab(Window, "HITBOX", 5)
-local TabMisc = UI.CreateTab(Window, "MISC", 6)
+local TabVisuals = UI.CreateTab(Window, "VISUALS", 6)
+local TabMisc = UI.CreateTab(Window, "MISC", 7)
 
 UI.CreateToggle(TabESP, "ESP Toggle", espEnabled, function(Value)
     espEnabled = Value
@@ -1127,7 +1138,26 @@ UI.CreateButton(TabMisc, "Server Hop", function()
         if #servers > 0 then TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[math.random(1,#servers)]) end
     end
 end)
-UI.CreateButton(TabMisc, "Boost FPS (Smooth)", function()
+UI.CreateToggle(TabVisuals, "Full Bright", fullBrightEnabled, function(Value)
+    fullBrightEnabled = Value
+    if fullBrightEnabled then
+        if not fullBrightConnection then
+            fullBrightConnection = RunService.RenderStepped:Connect(function()
+                local Lighting = game:GetService("Lighting")
+                Lighting.Ambient = Color3.new(1, 1, 1)
+                Lighting.ColorShift_Bottom = Color3.new(1, 1, 1)
+                Lighting.ColorShift_Top = Color3.new(1, 1, 1)
+                Lighting.GlobalShadows = false
+            end)
+        end
+    else
+        if fullBrightConnection then
+            fullBrightConnection:Disconnect()
+            fullBrightConnection = nil
+        end
+    end
+end)
+UI.CreateButton(TabVisuals, "Boost FPS (Smooth)", function()
     pcall(function()
         local Lighting = game:GetService("Lighting")
         Lighting.GlobalShadows = false
@@ -1154,7 +1184,7 @@ UI.CreateButton(TabMisc, "Boost FPS (Smooth)", function()
         Terrain.WaterTransparency = 0
     end)
 end)
-UI.CreateToggle(TabMisc, "Anti-Particle (No Lag)", noParticlesEnabled, function(Value)
+UI.CreateToggle(TabVisuals, "Anti-Particle (No Lag)", noParticlesEnabled, function(Value)
     noParticlesEnabled = Value
     if noParticlesEnabled then
         local function isLaggy(obj)

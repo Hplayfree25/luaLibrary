@@ -73,6 +73,10 @@ function Lib.CreateLabel(tab, name)
     return Lib.Components.Label.new(tab.container, name)
 end
 
+function Lib.CreateKeybind(tab, name, defaultKey, cb)
+    return Lib.Components.Keybind.new(tab.container, name, defaultKey, cb)
+end
+
 function Lib.Notify(config)
     return Lib.Notification.show(config)
 end

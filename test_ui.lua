@@ -79,6 +79,10 @@ UI.CreateToggle(Tab1, {Name = "Test Toggle", Desc = "Ini adalah contoh deskripsi
     print("Toggle state changed to:", state)
 end)
 
+UI.CreateKeybind(Tab1, {Name = "Aimbot Hotkey", Desc = "Tekan tombol ini untuk mengaktifkan fitur"}, Enum.KeyCode.E, function()
+    UI.Notify("Keybind Triggered", "Kamu menekan hotkey Aimbot!", 3)
+end)
+
 UI.CreateSlider(Tab1, "Test Slider", 0, 100, 50, function(v) return tostring(math.floor(v)) end, function(v)
     print("Slider value changed to:", v)
 end)

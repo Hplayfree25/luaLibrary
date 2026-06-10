@@ -12,6 +12,7 @@ Components.Slider = import("Slider")
 Components.Dropdown = import("Dropdown")
 Components.Textbox = import("Textbox")
 Components.Label = import("Label")
+Components.Keybind = import("Keybind")
 Components.Tab = import("Tab")
 
 return Components
