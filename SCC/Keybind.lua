@@ -29,7 +29,7 @@ function Keybind.new(parent, name, defaultKey, cb)
 	local callback = type(name) == "table" and (name.Callback or cb) or cb
 	local currentKey = defaultKey or Enum.KeyCode.E
 	local isBinding, disabled, lastCapture = false, false, 0
-	local connections = {}
+	local hovered, selected, connections = false, false, {}
 	local function connect(signal, fn)
 		local connection = signal:Connect(fn)
 		table.insert(connections, connection)
@@ -37,57 +37,84 @@ function Keybind.new(parent, name, defaultKey, cb)
 	end
 
 	local frm = Instance.new("Frame")
-	frm.Size = UDim2.new(1, 0, 0, desc and 64 or 48)
-	frm.BackgroundColor3 = Theme.PanelBackground
+	frm.Size = UDim2.new(1, 0, 0, 44)
+	frm.AutomaticSize = Enum.AutomaticSize.Y
+	frm.BackgroundColor3 = Theme.Surface or Theme.PanelBackground
 	frm.BackgroundTransparency = Theme.PanelTransparency
+	frm.BorderSizePixel = 0
 	frm.Parent = container
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = Theme.CornerRadius
+	corner.CornerRadius = Theme.CardCornerRadius or UDim.new(0, 14)
 	corner.Parent = frm
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = Theme.Stroke
 	stroke.Transparency = Theme.PanelStrokeTransparency
 	stroke.Parent = frm
 
+	local content = Instance.new("Frame")
+	content.Size = UDim2.new(1, -116, 0, 44)
+	content.AutomaticSize = Enum.AutomaticSize.Y
+	content.BackgroundTransparency = 1
+	content.BorderSizePixel = 0
+	content.Parent = frm
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 3)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = content
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, desc and 11 or 14)
+	padding.PaddingBottom = UDim.new(0, desc and 11 or 14)
+	padding.PaddingLeft = UDim.new(0, 14)
+	padding.Parent = content
+
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, -124, 0, desc and 22 or 28)
-	lbl.Position = UDim2.new(0, 16, 0, desc and 10 or 10)
+	lbl.Size = UDim2.new(1, 0, 0, 0)
+	lbl.AutomaticSize = Enum.AutomaticSize.Y
 	lbl.BackgroundTransparency = 1
+	lbl.BorderSizePixel = 0
 	lbl.Text = tostring(text or "Keybind")
 	lbl.TextColor3 = Theme.TextSecondary
 	lbl.Font = Theme.FontMedium
 	lbl.TextSize = 13
 	lbl.TextWrapped = true
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frm
+	lbl.TextYAlignment = Enum.TextYAlignment.Top
+	lbl.LayoutOrder = 1
+	lbl.Parent = content
 
 	if desc then
 		local description = Instance.new("TextLabel")
-		description.Size = UDim2.new(1, -124, 0, 22)
-		description.Position = UDim2.new(0, 16, 0, 34)
+		description.Size = UDim2.new(1, 0, 0, 0)
+		description.AutomaticSize = Enum.AutomaticSize.Y
 		description.BackgroundTransparency = 1
+		description.BorderSizePixel = 0
 		description.Text = tostring(desc)
 		description.TextColor3 = Theme.TextMuted
 		description.Font = Theme.FontMedium
 		description.TextSize = 11
 		description.TextWrapped = true
 		description.TextXAlignment = Enum.TextXAlignment.Left
-		description.Parent = frm
+		description.TextYAlignment = Enum.TextYAlignment.Top
+		description.LayoutOrder = 2
+		description.Parent = content
 	end
 
 	local bindBtn = Instance.new("TextButton")
-	bindBtn.Size = UDim2.new(0, 92, 0, 36)
-	bindBtn.Position = UDim2.new(1, -108, 0.5, -18)
+	bindBtn.Size = UDim2.fromOffset(88, 34)
+	bindBtn.AnchorPoint = Vector2.new(1, 0.5)
+	bindBtn.Position = UDim2.new(1, -14, 0.5, 0)
 	bindBtn.BackgroundColor3 = Theme.SecondaryBackground
+	bindBtn.BorderSizePixel = 0
 	bindBtn.Text = keyName(currentKey)
 	bindBtn.TextColor3 = Theme.TextPrimary
 	bindBtn.Font = Theme.FontMedium
 	bindBtn.TextSize = 11
+	bindBtn.TextTruncate = Enum.TextTruncate.AtEnd
 	bindBtn.AutoButtonColor = false
 	bindBtn.Selectable = true
 	bindBtn.Parent = frm
 	local btnCorner = Instance.new("UICorner")
-	btnCorner.CornerRadius = UDim.new(0, 5)
+	btnCorner.CornerRadius = Theme.FieldCornerRadius or Theme.CornerRadius
 	btnCorner.Parent = bindBtn
 	local btnStroke = Instance.new("UIStroke")
 	btnStroke.Color = Theme.Stroke
@@ -97,13 +124,23 @@ function Keybind.new(parent, name, defaultKey, cb)
 	local function render()
 		bindBtn.Text = isBinding and "Press a key..." or keyName(currentKey)
 		bindBtn.BackgroundColor3 = isBinding and Theme.Accent or Theme.SecondaryBackground
-		bindBtn.TextColor3 = disabled and Theme.TextMuted or Theme.TextPrimary
-		btnStroke.Color = isBinding and Theme.Accent or Theme.Stroke
+		bindBtn.TextColor3 = disabled and Theme.TextMuted or (isBinding and Theme.Background or Theme.TextPrimary)
+		btnStroke.Transparency = isBinding and (Theme.FocusStrokeTransparency or 0.28) or Theme.PanelStrokeTransparency
+	end
+	local function refresh()
+		local on = not disabled and (hovered or selected or isBinding)
+		frm.BackgroundColor3 = on and (Theme.SurfaceHover or Theme.SecondaryBackground) or (Theme.Surface or Theme.PanelBackground)
+		lbl.TextColor3 = disabled and Theme.TextMuted or (on and Theme.TextPrimary or Theme.TextSecondary)
+		stroke.Transparency = on and (Theme.HoverStrokeTransparency or 0.5) or Theme.PanelStrokeTransparency
+		if not isBinding then
+			btnStroke.Transparency = on and (Theme.HoverStrokeTransparency or 0.5) or Theme.PanelStrokeTransparency
+		end
 	end
 	local function beginBinding()
 		if disabled or isBinding then return end
 		isBinding = true
 		render()
+		refresh()
 	end
 	local function finishBinding(key)
 		if key then
@@ -112,19 +149,14 @@ function Keybind.new(parent, name, defaultKey, cb)
 		end
 		isBinding = false
 		render()
-	end
-	local function focused(on)
-		if disabled then return end
-		frm.BackgroundColor3 = on and Theme.SecondaryBackground or Theme.PanelBackground
-		lbl.TextColor3 = on and Theme.TextPrimary or Theme.TextSecondary
-		stroke.Color = on and Theme.Accent or Theme.Stroke
+		refresh()
 	end
 
 	connect(bindBtn.Activated, beginBinding)
-	connect(bindBtn.MouseEnter, function() focused(true) end)
-	connect(bindBtn.MouseLeave, function() focused(false) end)
-	connect(bindBtn.SelectionGained, function() focused(true) end)
-	connect(bindBtn.SelectionLost, function() focused(false) end)
+	connect(bindBtn.MouseEnter, function() hovered = true refresh() end)
+	connect(bindBtn.MouseLeave, function() hovered = false refresh() end)
+	connect(bindBtn.SelectionGained, function() selected = true refresh() end)
+	connect(bindBtn.SelectionLost, function() selected = false refresh() end)
 	connect(uis.InputBegan, function(input, gameProcessed)
 		if disabled then return end
 		if isBinding then
@@ -156,9 +188,8 @@ function Keybind.new(parent, name, defaultKey, cb)
 		bindBtn.Active = not disabled
 		bindBtn.Selectable = not disabled
 		if disabled then isBinding = false end
-		lbl.TextColor3 = disabled and Theme.TextMuted or Theme.TextSecondary
-		stroke.Color = Theme.Stroke
 		render()
+		refresh()
 	end
 	function self.destroy()
 		for _, connection in ipairs(connections) do connection:Disconnect() end

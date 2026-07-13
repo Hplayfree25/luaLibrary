@@ -11,11 +11,14 @@ local Utils = import("Utils")
 
 function Tab.new(window, name, order)
     local Theme = window.theme or DefaultTheme
+    local radius = Theme.FieldCornerRadius or Theme.CornerRadius
+
     local button = Instance.new("TextButton")
     button.Name = tostring(name)
-    button.Size = UDim2.new(1, -20, 0, 38)
+    button.Size = UDim2.new(1, -16, 0, 36)
     button.BackgroundColor3 = Theme.TabInactive
-    button.BackgroundTransparency = 0.2
+    button.BackgroundTransparency = Theme.TabTransparency or 0.38
+    button.BorderSizePixel = 0
     button.Text = tostring(name)
     button.TextColor3 = Theme.TextMuted
     button.Font = Theme.FontBold
@@ -25,24 +28,24 @@ function Tab.new(window, name, order)
     button.Selectable = true
     button.Parent = window.tabContainer
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = Theme.CornerRadius
-    corner.Parent = button
+    local buttonCorner = Instance.new("UICorner")
+    buttonCorner.CornerRadius = radius
+    buttonCorner.Parent = button
 
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Theme.Accent
-    stroke.Transparency = 1
-    stroke.Parent = button
+    local buttonStroke = Instance.new("UIStroke")
+    buttonStroke.Color = Theme.Stroke
+    buttonStroke.Transparency = Theme.BorderTransparency or 0.9
+    buttonStroke.Parent = button
 
     local container = Instance.new("ScrollingFrame")
     container.Name = tostring(name) .. "Content"
-    container.Size = UDim2.new(1, -20, 1, -16)
-    container.Position = UDim2.fromOffset(10, 8)
+    container.Size = UDim2.new(1, -12, 1, -12)
+    container.Position = UDim2.fromOffset(6, 6)
     container.BackgroundTransparency = 1
     container.BorderSizePixel = 0
-    container.ScrollBarThickness = 3
-    container.ScrollBarImageColor3 = Theme.Accent
-    container.ScrollBarImageTransparency = 0.35
+    container.ScrollBarThickness = 2
+    container.ScrollBarImageColor3 = Theme.TextMuted
+    container.ScrollBarImageTransparency = Theme.ScrollBarTransparency or 0.55
     container.AutomaticCanvasSize = Enum.AutomaticSize.Y
     container.CanvasSize = UDim2.new()
     container.ScrollingDirection = Enum.ScrollingDirection.Y
@@ -51,13 +54,14 @@ function Tab.new(window, name, order)
 
     local layout = Instance.new("UIListLayout")
     layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Padding = UDim.new(0, 8)
+    layout.Padding = UDim.new(0, 7)
     layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
     layout.Parent = container
 
     local padding = Instance.new("UIPadding")
     padding.PaddingTop = UDim.new(0, 2)
-    padding.PaddingBottom = UDim.new(0, 10)
+    padding.PaddingBottom = UDim.new(0, 8)
+    padding.PaddingLeft = UDim.new(0, 2)
     padding.PaddingRight = UDim.new(0, 6)
     padding.Parent = container
 
@@ -70,38 +74,38 @@ function Tab.new(window, name, order)
 
     self.updateLayout = function(compact)
         if compact then
-            button.Size = UDim2.fromOffset(math.clamp(#tostring(name) * 8 + 28, 76, 140), 34)
-            container.Size = UDim2.new(1, -16, 1, -12)
-            container.Position = UDim2.fromOffset(8, 6)
+            local measured = math.max(button.TextBounds.X, #tostring(name) * 7)
+            button.Size = UDim2.fromOffset(math.clamp(measured + 28, 76, 144), 36)
+            container.Size = UDim2.new(1, -10, 1, -10)
+            container.Position = UDim2.fromOffset(5, 5)
         else
-            button.Size = UDim2.new(1, -20, 0, 38)
-            container.Size = UDim2.new(1, -20, 1, -16)
-            container.Position = UDim2.fromOffset(10, 8)
+            button.Size = UDim2.new(1, -16, 0, 36)
+            container.Size = UDim2.new(1, -12, 1, -12)
+            container.Position = UDim2.fromOffset(6, 6)
         end
     end
 
-    button.MouseEnter:Connect(function()
-        if window.activeTab ~= self then
-            Utils.tween(button, TweenInfo.new(0.15), {BackgroundColor3 = Theme.SecondaryBackground, TextColor3 = Theme.TextSecondary})
-        end
-    end)
-    button.MouseLeave:Connect(function()
-        if window.activeTab ~= self then
-            Utils.tween(button, TweenInfo.new(0.15), {BackgroundColor3 = Theme.TabInactive, TextColor3 = Theme.TextMuted})
-        end
-    end)
-    button.SelectionGained:Connect(function()
-        Utils.tween(stroke, TweenInfo.new(0.12), {Transparency = 0.2})
-    end)
-    button.SelectionLost:Connect(function()
-        Utils.tween(stroke, TweenInfo.new(0.12), {Transparency = window.activeTab == self and 0.45 or 1})
-    end)
-    button.Activated:Connect(function()
-        Tab.switch(window, name)
-    end)
+    local function render(active, focused)
+        local selected = window.activeTab == self
+        Utils.tween(button, TweenInfo.new(0.14), {
+            BackgroundColor3 = selected and (Theme.SurfaceActive or Theme.TabActive) or (active and Theme.SurfaceHover or Theme.TabInactive),
+            BackgroundTransparency = selected and (Theme.ActiveTransparency or 0.12) or (active and (Theme.HoverTransparency or 0.22) or (Theme.TabTransparency or 0.38)),
+            TextColor3 = selected and Theme.TextPrimary or (active and Theme.TextSecondary or Theme.TextMuted)
+        })
+        Utils.tween(buttonStroke, TweenInfo.new(0.14), {
+            Color = focused and Theme.Focus or Theme.Stroke,
+            Transparency = focused and (Theme.FocusStrokeTransparency or 0.35) or (selected and (Theme.ActiveStrokeTransparency or 0.62) or (Theme.BorderTransparency or 0.9))
+        })
+    end
+
+    button.MouseEnter:Connect(function() render(true, false) end)
+    button.MouseLeave:Connect(function() render(false, false) end)
+    button.SelectionGained:Connect(function() render(true, true) end)
+    button.SelectionLost:Connect(function() render(false, false) end)
+    button.Activated:Connect(function() Tab.switch(window, name) end)
 
     table.insert(window.tabs, self)
-    self.updateLayout(window.mainFrame.AbsoluteSize.X > 0 and window.mainFrame.AbsoluteSize.X < 520)
+    self.updateLayout(window.compact)
     if #window.tabs == 1 then Tab.switch(window, name) end
     return self
 end
@@ -110,12 +114,18 @@ function Tab.switch(window, tabName)
     for _, tab in ipairs(window.tabs or {}) do
         local selected = tab.name == tabName
         tab.container.Visible = selected
-        Utils.tween(tab.button, TweenInfo.new(0.18), {
+        Utils.tween(tab.button, TweenInfo.new(0.16), {
             BackgroundColor3 = selected and (window.theme.SurfaceActive or window.theme.TabActive) or window.theme.TabInactive,
+            BackgroundTransparency = selected and (window.theme.ActiveTransparency or 0.12) or (window.theme.TabTransparency or 0.38),
             TextColor3 = selected and window.theme.TextPrimary or window.theme.TextMuted
         })
-        local stroke = tab.button:FindFirstChildOfClass("UIStroke")
-        if stroke then Utils.tween(stroke, TweenInfo.new(0.18), {Transparency = selected and 0.45 or 1}) end
+        local outline = tab.button:FindFirstChildOfClass("UIStroke")
+        if outline then
+            Utils.tween(outline, TweenInfo.new(0.16), {
+                Color = window.theme.Stroke,
+                Transparency = selected and (window.theme.ActiveStrokeTransparency or 0.62) or (window.theme.BorderTransparency or 0.9)
+            })
+        end
         if selected then
             window.activeTab = tab
             tab.container.CanvasPosition = Vector2.new(0, tab.container.CanvasPosition.Y)

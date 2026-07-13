@@ -9,7 +9,7 @@ local Window = UI.CreateWindow({
     ToggleText = "TST",
     Keybind = Enum.KeyCode.RightControl,
     GamepadKeybind = Enum.KeyCode.ButtonStart,
-    Size = UDim2.fromOffset(560, 380),
+    Size = UDim2.fromOffset(500, 320),
     HideOnStartup = true,
     OnIntroCompleted = function(win)
         assert(win.isReady(), "window must be ready after intro")
@@ -29,8 +29,8 @@ local Settings = UI.CreateTab(Window, "SETTINGS", 2)
 
 UI.CreateSection(Main, "AIM ASSIST")
 UI.CreateLabel(Main, {
-    Name = "Responsive controls",
-    Desc = "Resize or rotate the screen to test the compact navigation layout."
+    Name = "Rounded glass controls with a deliberately long title that wraps safely on narrow screens",
+    Desc = "The 500px window must keep its desktop sidebar; resize below 430px to test compact navigation."
 })
 
 local toggle = UI.CreateToggle(Main, {
@@ -94,6 +94,13 @@ local disabled = UI.CreateButton(Settings, "Disabled Button", function()
     error("disabled button should not run")
 end)
 disabled.setDisabled(true)
+
+UI.CreateButton(Settings, "Test Minimize / Reopen", function()
+    Window.hide()
+    task.delay(0.5, function()
+        assert(Window.show(), "window should reopen after hide")
+    end)
+end)
 
 UI.CreateButton(Settings, "Unload Script", function()
     if env[scriptId] then env[scriptId]() end

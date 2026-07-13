@@ -16,17 +16,17 @@ local function context(parent)
 	return parent, DefaultTheme
 end
 
-local function option(option)
-	if type(option) == "table" then
-		local label = option.name or option.Name or option.label or option.Label or option[1]
-		local value = option.val
-		if value == nil then value = option.Value end
-		if value == nil then value = option.value end
-		if value == nil then value = option[2] end
+local function option(raw)
+	if type(raw) == "table" then
+		local label = raw.name or raw.Name or raw.label or raw.Label or raw[1]
+		local value = raw.val
+		if value == nil then value = raw.Value end
+		if value == nil then value = raw.value end
+		if value == nil then value = raw[2] end
 		if value == nil then value = label end
 		return tostring(label or value or "Option"), value
 	end
-	return tostring(option), option
+	return tostring(raw), raw
 end
 
 function Dropdown.new(parent, name, opts, defaultIdx, cb)
@@ -35,8 +35,8 @@ function Dropdown.new(parent, name, opts, defaultIdx, cb)
 	name = type(name) == "table" and (name.Name or name[1]) or name
 	local options = type(opts) == "table" and opts or {}
 	local cur = math.clamp(tonumber(defaultIdx) or 1, 1, math.max(#options, 1))
-	local connections, optionConnections = {}, {}
-	local disabled, expanded = false, false
+	local connections, optionConnections, items = {}, {}, {}
+	local disabled, expanded, triggerHover, triggerFocus = false, false, false, false
 	local function connect(signal, fn, list)
 		local connection = signal:Connect(fn)
 		table.insert(list or connections, connection)
@@ -45,78 +45,141 @@ function Dropdown.new(parent, name, opts, defaultIdx, cb)
 	local function clearOptionConnections()
 		for _, connection in ipairs(optionConnections) do connection:Disconnect() end
 		table.clear(optionConnections)
+		table.clear(items)
 	end
 
-	local collapsedHeight = desc and 68 or 52
 	local frm = Instance.new("Frame")
-	frm.Size = UDim2.new(1, 0, 0, collapsedHeight)
-	frm.BackgroundColor3 = Theme.PanelBackground
-	frm.BackgroundTransparency = Theme.PanelTransparency
-	frm.ClipsDescendants = true
+	frm.Size = UDim2.new(1, 0, 0, 0)
+	frm.AutomaticSize = Enum.AutomaticSize.Y
+	frm.BackgroundTransparency = 1
+	frm.BorderSizePixel = 0
 	frm.Parent = container
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = Theme.CornerRadius
-	corner.Parent = frm
-	local stroke = Instance.new("UIStroke")
-	stroke.Color = Theme.Stroke
-	stroke.Transparency = Theme.PanelStrokeTransparency
-	stroke.Parent = frm
+	local rootLayout = Instance.new("UIListLayout")
+	rootLayout.Padding = UDim.new(0, 6)
+	rootLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	rootLayout.Parent = frm
+
+	local header = Instance.new("Frame")
+	header.Size = UDim2.new(1, 0, 0, 48)
+	header.AutomaticSize = Enum.AutomaticSize.Y
+	header.BackgroundColor3 = Theme.Surface or Theme.PanelBackground
+	header.BackgroundTransparency = Theme.PanelTransparency
+	header.BorderSizePixel = 0
+	header.LayoutOrder = 1
+	header.Parent = frm
+	local headerCorner = Instance.new("UICorner")
+	headerCorner.CornerRadius = Theme.CardCornerRadius or UDim.new(0, 14)
+	headerCorner.Parent = header
+	local headerStroke = Instance.new("UIStroke")
+	headerStroke.Color = Theme.Stroke
+	headerStroke.Transparency = Theme.PanelStrokeTransparency
+	headerStroke.Parent = header
+
+	local content = Instance.new("Frame")
+	content.Size = UDim2.new(1, -150, 0, 48)
+	content.AutomaticSize = Enum.AutomaticSize.Y
+	content.BackgroundTransparency = 1
+	content.BorderSizePixel = 0
+	content.Parent = header
+	local contentLayout = Instance.new("UIListLayout")
+	contentLayout.Padding = UDim.new(0, 3)
+	contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	contentLayout.Parent = content
+	local contentPadding = Instance.new("UIPadding")
+	contentPadding.PaddingTop = UDim.new(0, desc and 10 or 15)
+	contentPadding.PaddingBottom = UDim.new(0, desc and 10 or 15)
+	contentPadding.PaddingLeft = UDim.new(0, 14)
+	contentPadding.Parent = content
 
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, -156, 0, 24)
-	lbl.Position = UDim2.new(0, 16, 0, desc and 10 or 14)
+	lbl.Size = UDim2.new(1, 0, 0, 0)
+	lbl.AutomaticSize = Enum.AutomaticSize.Y
 	lbl.BackgroundTransparency = 1
+	lbl.BorderSizePixel = 0
 	lbl.Text = tostring(name or "Dropdown")
 	lbl.TextColor3 = Theme.TextSecondary
 	lbl.Font = Theme.FontMedium
 	lbl.TextSize = 13
 	lbl.TextWrapped = true
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frm
+	lbl.TextYAlignment = Enum.TextYAlignment.Top
+	lbl.LayoutOrder = 1
+	lbl.Parent = content
 
 	if desc then
 		local description = Instance.new("TextLabel")
-		description.Size = UDim2.new(1, -156, 0, 22)
-		description.Position = UDim2.new(0, 16, 0, 34)
+		description.Size = UDim2.new(1, 0, 0, 0)
+		description.AutomaticSize = Enum.AutomaticSize.Y
 		description.BackgroundTransparency = 1
+		description.BorderSizePixel = 0
 		description.Text = tostring(desc)
 		description.TextColor3 = Theme.TextMuted
 		description.Font = Theme.FontMedium
 		description.TextSize = 11
 		description.TextWrapped = true
 		description.TextXAlignment = Enum.TextXAlignment.Left
-		description.Parent = frm
+		description.TextYAlignment = Enum.TextYAlignment.Top
+		description.LayoutOrder = 2
+		description.Parent = content
 	end
 
 	local btn = Instance.new("TextButton")
-	btn.Size = UDim2.new(0, 124, 0, 36)
-	btn.Position = UDim2.new(1, -140, 0, desc and 16 or 8)
+	btn.Size = UDim2.fromOffset(124, 34)
+	btn.AnchorPoint = Vector2.new(1, 0.5)
+	btn.Position = UDim2.new(1, -14, 0.5, 0)
 	btn.BackgroundColor3 = Theme.SecondaryBackground
+	btn.BorderSizePixel = 0
 	btn.TextColor3 = Theme.TextSecondary
 	btn.Font = Theme.FontMedium
 	btn.TextSize = 11
 	btn.TextTruncate = Enum.TextTruncate.AtEnd
+	btn.TextXAlignment = Enum.TextXAlignment.Left
 	btn.AutoButtonColor = false
 	btn.Selectable = true
-	btn.Parent = frm
+	btn.Parent = header
 	local btnCorner = Instance.new("UICorner")
-	btnCorner.CornerRadius = UDim.new(0, 5)
+	btnCorner.CornerRadius = Theme.FieldCornerRadius or Theme.CornerRadius
 	btnCorner.Parent = btn
+	local btnStroke = Instance.new("UIStroke")
+	btnStroke.Color = Theme.Stroke
+	btnStroke.Transparency = Theme.PanelStrokeTransparency
+	btnStroke.Parent = btn
+	local btnPadding = Instance.new("UIPadding")
+	btnPadding.PaddingLeft = UDim.new(0, 11)
+	btnPadding.PaddingRight = UDim.new(0, 30)
+	btnPadding.Parent = btn
+
+	local chevron = Instance.new("TextLabel")
+	chevron.Size = UDim2.fromOffset(22, 22)
+	chevron.AnchorPoint = Vector2.new(1, 0.5)
+	chevron.Position = UDim2.new(1, -6, 0.5, 0)
+	chevron.BackgroundTransparency = 1
+	chevron.BorderSizePixel = 0
+	chevron.Text = "⌄"
+	chevron.TextColor3 = Theme.TextMuted
+	chevron.Font = Theme.FontBold
+	chevron.TextSize = 14
+	chevron.Parent = btn
 
 	local list = Instance.new("ScrollingFrame")
-	list.Size = UDim2.new(1, -24, 0, 0)
-	list.Position = UDim2.new(0, 12, 0, collapsedHeight)
-	list.BackgroundColor3 = Theme.SecondaryBackground
+	list.Size = UDim2.new(1, 0, 0, 0)
+	list.BackgroundColor3 = Theme.SurfaceElevated or Theme.SecondaryBackground
+	list.BackgroundTransparency = Theme.PanelTransparency
 	list.BorderSizePixel = 0
 	list.CanvasSize = UDim2.new()
 	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	list.ScrollBarThickness = 3
-	list.ScrollBarImageColor3 = Theme.Accent
+	list.ScrollBarThickness = 2
+	list.ScrollBarImageColor3 = Theme.TextMuted
 	list.Visible = false
+	list.LayoutOrder = 2
 	list.Parent = frm
 	local listCorner = Instance.new("UICorner")
-	listCorner.CornerRadius = UDim.new(0, 5)
+	listCorner.CornerRadius = Theme.CardCornerRadius or UDim.new(0, 14)
 	listCorner.Parent = list
+	local listStroke = Instance.new("UIStroke")
+	listStroke.Color = Theme.Stroke
+	listStroke.Transparency = Theme.PanelStrokeTransparency
+	listStroke.Parent = list
 	local layout = Instance.new("UIListLayout")
 	layout.Padding = UDim.new(0, 4)
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
@@ -130,25 +193,47 @@ function Dropdown.new(parent, name, opts, defaultIdx, cb)
 
 	local setExpanded, rebuild
 	local function updateButton()
-		btn.Text = #options > 0 and (option(options[cur])) .. (expanded and "  ▲" or "  ▼") or "No options"
+		btn.Text = #options > 0 and (option(options[cur])) or "No options"
+		chevron.Text = expanded and "⌃" or "⌄"
+	end
+	local function paint(index, hot)
+		local item = items[index]
+		if not item then return end
+		local chosen = index == cur
+		item.BackgroundColor3 = chosen and Theme.Accent
+			or (hot and (Theme.SurfaceHover or Theme.SecondaryBackground) or (Theme.Surface or Theme.PanelBackground))
+		item.BackgroundTransparency = chosen and 0 or (hot and 0 or Theme.PanelTransparency)
+		item.TextColor3 = chosen and Theme.Background or (hot and Theme.TextPrimary or Theme.TextSecondary)
 	end
 	local function select(index, fire)
 		if #options == 0 then return end
+		local old = cur
 		cur = math.clamp(index, 1, #options)
+		paint(old, false)
+		paint(cur, false)
 		updateButton()
 		if fire and cb then
 			local _, value = option(options[cur])
 			cb(value)
 		end
 	end
+	local function refreshTrigger()
+		local on = not disabled and (triggerHover or triggerFocus or expanded)
+		header.BackgroundColor3 = on and (Theme.SurfaceHover or Theme.SecondaryBackground) or (Theme.Surface or Theme.PanelBackground)
+		lbl.TextColor3 = disabled and Theme.TextMuted or (on and Theme.TextPrimary or Theme.TextSecondary)
+		btn.TextColor3 = disabled and Theme.TextMuted or (on and Theme.TextPrimary or Theme.TextSecondary)
+		chevron.TextColor3 = disabled and Theme.TextMuted or (on and Theme.TextPrimary or Theme.TextMuted)
+		headerStroke.Transparency = on and (Theme.HoverStrokeTransparency or 0.5) or Theme.PanelStrokeTransparency
+		btnStroke.Transparency = on and (Theme.FocusStrokeTransparency or 0.28) or Theme.PanelStrokeTransparency
+	end
 	setExpanded = function(value)
 		expanded = not disabled and #options > 0 and not not value
-		local listHeight = expanded and math.min(#options * 40 + 12, 172) or 0
+		local count = #options
+		local listHeight = expanded and math.min(count * 36 + 8, 160) or 0
 		list.Visible = expanded
-		list.Size = UDim2.new(1, -24, 0, listHeight)
-		frm.Size = UDim2.new(1, 0, 0, collapsedHeight + listHeight + (expanded and 8 or 0))
-		stroke.Color = expanded and Theme.Accent or Theme.Stroke
+		list.Size = UDim2.new(1, 0, 0, listHeight)
 		updateButton()
+		refreshTrigger()
 	end
 	rebuild = function()
 		clearOptionConnections()
@@ -158,32 +243,33 @@ function Dropdown.new(parent, name, opts, defaultIdx, cb)
 		for index, raw in ipairs(options) do
 			local label = option(raw)
 			local item = Instance.new("TextButton")
-			item.Size = UDim2.new(1, -12, 0, 36)
-			item.BackgroundColor3 = index == cur and Theme.Accent or Theme.PanelBackground
-			item.BackgroundTransparency = index == cur and 0.1 or Theme.PanelTransparency
+			item.Size = UDim2.new(1, 0, 0, 32)
+			item.BorderSizePixel = 0
 			item.Text = label
-			item.TextColor3 = index == cur and Theme.TextPrimary or Theme.TextSecondary
 			item.Font = Theme.FontMedium
 			item.TextSize = 12
 			item.TextWrapped = true
 			item.AutoButtonColor = false
-			item.Selectable = true
+			item.Selectable = not disabled
+			item.Active = not disabled
 			item.LayoutOrder = index
 			item.Parent = list
+			items[index] = item
 			local itemCorner = Instance.new("UICorner")
-			itemCorner.CornerRadius = UDim.new(0, 4)
+			itemCorner.CornerRadius = Theme.FieldCornerRadius or Theme.CornerRadius
 			itemCorner.Parent = item
+			paint(index, false)
+			local pointer, focus = false, false
+			local function refreshItem() paint(index, not disabled and (pointer or focus)) end
+			connect(item.MouseEnter, function() pointer = true refreshItem() end, optionConnections)
+			connect(item.MouseLeave, function() pointer = false refreshItem() end, optionConnections)
+			connect(item.SelectionGained, function() focus = true refreshItem() end, optionConnections)
+			connect(item.SelectionLost, function() focus = false refreshItem() end, optionConnections)
 			connect(item.Activated, function()
 				if disabled then return end
 				select(index, true)
 				setExpanded(false)
 				Utils.safeSvc("GuiService").SelectedObject = btn
-			end, optionConnections)
-			connect(item.SelectionGained, function()
-				if not disabled then item.BackgroundColor3 = Theme.AccentHover or Theme.Accent end
-			end, optionConnections)
-			connect(item.SelectionLost, function()
-				item.BackgroundColor3 = index == cur and Theme.Accent or Theme.PanelBackground
 			end, optionConnections)
 		end
 		setExpanded(expanded)
@@ -192,16 +278,10 @@ function Dropdown.new(parent, name, opts, defaultIdx, cb)
 	connect(btn.Activated, function()
 		if not disabled then setExpanded(not expanded) end
 	end)
-	connect(btn.SelectionGained, function()
-		if not disabled then
-			btn.TextColor3 = Theme.TextPrimary
-			stroke.Color = Theme.Accent
-		end
-	end)
-	connect(btn.SelectionLost, function()
-		btn.TextColor3 = disabled and Theme.TextMuted or Theme.TextSecondary
-		if not expanded then stroke.Color = Theme.Stroke end
-	end)
+	connect(btn.MouseEnter, function() triggerHover = true refreshTrigger() end)
+	connect(btn.MouseLeave, function() triggerHover = false refreshTrigger() end)
+	connect(btn.SelectionGained, function() triggerFocus = true refreshTrigger() end)
+	connect(btn.SelectionLost, function() triggerFocus = false refreshTrigger() end)
 	connect(btn.InputBegan, function(input)
 		if disabled or #options == 0 then return end
 		if input.KeyCode == Enum.KeyCode.Down or input.KeyCode == Enum.KeyCode.DPadDown then
@@ -234,8 +314,12 @@ function Dropdown.new(parent, name, opts, defaultIdx, cb)
 		disabled = not not value
 		btn.Active = not disabled
 		btn.Selectable = not disabled
-		btn.TextColor3 = disabled and Theme.TextMuted or Theme.TextSecondary
 		if disabled then setExpanded(false) end
+		for _, item in ipairs(items) do
+			item.Active = not disabled
+			item.Selectable = not disabled
+		end
+		refreshTrigger()
 	end
 	function self.destroy()
 		clearOptionConnections()

@@ -10,6 +10,22 @@ local DefaultTheme = import("Theme")
 local Utils = import("Utils")
 local Drag = import("Drag")
 
+local function corner(parent, radius)
+    local value = Instance.new("UICorner")
+    value.CornerRadius = radius
+    value.Parent = parent
+    return value
+end
+
+local function stroke(parent, theme, transparency)
+    local value = Instance.new("UIStroke")
+    value.Color = theme.Stroke
+    value.Transparency = transparency or theme.StrokeTransparency
+    value.Thickness = 1
+    value.Parent = parent
+    return value
+end
+
 function Window.new(options)
     if type(options) == "string" then options = {Title = options} end
     options = options or {}
@@ -20,12 +36,15 @@ function Window.new(options)
     local requestedSize = options.Size or UDim2.fromOffset(600, 380)
     local toggleKey = options.Keybind or Enum.KeyCode.LeftAlt
     local gamepadKey = options.GamepadKeybind or Enum.KeyCode.ButtonStart
-    local titleText = options.Title or "Universal UI"
-    local self = {theme = Theme, tabs = {}, controls = {}}
+    local titleText = tostring(options.Title or "Universal UI")
+    local windowRadius = Theme.WindowCornerRadius or UDim.new(0, 18)
+    local cardRadius = Theme.CardCornerRadius or Theme.CornerRadius
+    local fieldRadius = Theme.FieldCornerRadius or Theme.CornerRadius
+    local self = {theme = Theme, tabs = {}, controls = {}, compact = false}
     local state = "intro"
     local isAnimating = false
     local minimized = false
-    local compact = false
+    local resolvedSize = Vector2.new(600, 380)
     local connections = {}
 
     local function connect(signal, callback)
@@ -47,8 +66,9 @@ function Window.new(options)
     btnToggle.Size = UDim2.fromOffset(52, 52)
     btnToggle.AnchorPoint = Vector2.new(1, 0.5)
     btnToggle.Position = UDim2.new(1, -16, 0.5, 0)
-    btnToggle.BackgroundColor3 = Theme.Surface or Theme.PanelBackground
-    btnToggle.BackgroundTransparency = 0.08
+    btnToggle.BackgroundColor3 = Theme.SurfaceElevated or Theme.PanelBackground
+    btnToggle.BackgroundTransparency = Theme.GlassTransparency or 0.12
+    btnToggle.BorderSizePixel = 0
     btnToggle.Text = options.ToggleText or "UI"
     btnToggle.TextColor3 = Theme.TextPrimary
     btnToggle.Font = Theme.FontBold
@@ -58,14 +78,8 @@ function Window.new(options)
     btnToggle.Selectable = true
     btnToggle.Visible = false
     btnToggle.Parent = gui
-
-    local toggleCorner = Instance.new("UICorner")
-    toggleCorner.CornerRadius = UDim.new(1, 0)
-    toggleCorner.Parent = btnToggle
-    local toggleStroke = Instance.new("UIStroke")
-    toggleStroke.Color = Theme.Accent
-    toggleStroke.Transparency = 0.35
-    toggleStroke.Parent = btnToggle
+    corner(btnToggle, UDim.new(1, 0))
+    local toggleStroke = stroke(btnToggle, Theme, Theme.BorderTransparency or 0.82)
 
     local main = Instance.new("Frame")
     main.Name = "Window"
@@ -73,85 +87,94 @@ function Window.new(options)
     main.Position = UDim2.fromScale(0.5, 0.5)
     main.BackgroundColor3 = Theme.Background
     main.BackgroundTransparency = Theme.BackgroundTransparency
+    main.BorderSizePixel = 0
     main.ClipsDescendants = true
     main.Active = true
     main.Visible = false
     main.Parent = gui
+    corner(main, windowRadius)
+    local mainStroke = stroke(main, Theme, Theme.StrokeTransparency)
 
-    local mainCorner = Instance.new("UICorner")
-    mainCorner.CornerRadius = Theme.WindowCornerRadius
-    mainCorner.Parent = main
-    local mainStroke = Instance.new("UIStroke")
-    mainStroke.Color = Theme.Stroke
-    mainStroke.Transparency = Theme.StrokeTransparency
-    mainStroke.Parent = main
+    local scale = Instance.new("UIScale")
+    scale.Scale = 1
+    scale.Parent = main
 
     local titleBar = Instance.new("Frame")
     titleBar.Name = "TitleBar"
-    titleBar.Size = UDim2.new(1, 0, 0, 48)
-    titleBar.BackgroundColor3 = Theme.Surface or Theme.PanelBackground
-    titleBar.BackgroundTransparency = 0.12
+    titleBar.Position = UDim2.fromOffset(10, 10)
+    titleBar.Size = UDim2.new(1, -20, 0, 42)
+    titleBar.BackgroundColor3 = Theme.SurfaceElevated or Theme.PanelBackground
+    titleBar.BackgroundTransparency = Theme.GlassTransparency or 0.18
+    titleBar.BorderSizePixel = 0
     titleBar.Active = true
     titleBar.Parent = main
+    corner(titleBar, cardRadius)
+    stroke(titleBar, Theme, Theme.PanelStrokeTransparency)
 
     local brand = Instance.new("TextLabel")
-    brand.Size = UDim2.new(1, -104, 1, 0)
-    brand.Position = UDim2.fromOffset(16, 0)
+    brand.Size = UDim2.new(1, -100, 1, 0)
+    brand.Position = UDim2.fromOffset(14, 0)
     brand.BackgroundTransparency = 1
     brand.Text = titleText
     brand.TextColor3 = Theme.TextPrimary
     brand.Font = Theme.FontBold
-    brand.TextSize = 15
+    brand.TextSize = 14
     brand.TextXAlignment = Enum.TextXAlignment.Left
     brand.TextTruncate = Enum.TextTruncate.AtEnd
+    brand.Active = true
     brand.Parent = titleBar
 
-    local minimize = Instance.new("TextButton")
-    minimize.Name = "Minimize"
-    minimize.Size = UDim2.fromOffset(36, 32)
-    minimize.AnchorPoint = Vector2.new(1, 0.5)
-    minimize.Position = UDim2.new(1, -48, 0.5, 0)
-    minimize.BackgroundColor3 = Theme.SurfaceHover or Theme.SecondaryBackground
-    minimize.BackgroundTransparency = 1
-    minimize.Text = "—"
-    minimize.TextColor3 = Theme.TextSecondary
-    minimize.Font = Theme.FontBold
-    minimize.TextSize = 14
-    minimize.AutoButtonColor = false
-    minimize.Selectable = true
-    minimize.Parent = titleBar
+    local function titleButton(name, text, offset, textSize)
+        local button = Instance.new("TextButton")
+        button.Name = name
+        button.Size = UDim2.fromOffset(38, 34)
+        button.AnchorPoint = Vector2.new(1, 0.5)
+        button.Position = UDim2.new(1, offset, 0.5, 0)
+        button.BackgroundColor3 = Theme.SurfaceHover or Theme.SecondaryBackground
+        button.BackgroundTransparency = 1
+        button.BorderSizePixel = 0
+        button.Text = text
+        button.TextColor3 = Theme.TextSecondary
+        button.Font = Theme.FontBold
+        button.TextSize = textSize
+        button.AutoButtonColor = false
+        button.Selectable = true
+        button.Parent = titleBar
+        corner(button, fieldRadius)
 
-    local close = minimize:Clone()
-    close.Name = "Close"
-    close.Position = UDim2.new(1, -8, 0.5, 0)
-    close.Text = "×"
-    close.TextSize = 18
-    close.Parent = titleBar
-
-    for _, button in ipairs({minimize, close}) do
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = Theme.CornerRadius
-        corner.Parent = button
-        connect(button.MouseEnter, function()
-            Utils.tween(button, TweenInfo.new(0.15), {BackgroundTransparency = 0, TextColor3 = Theme.TextPrimary})
-        end)
-        connect(button.MouseLeave, function()
-            Utils.tween(button, TweenInfo.new(0.15), {BackgroundTransparency = 1, TextColor3 = Theme.TextSecondary})
-        end)
+        local function focus(active)
+            Utils.tween(button, TweenInfo.new(0.14), {
+                BackgroundTransparency = active and (Theme.HoverTransparency or 0.18) or 1,
+                TextColor3 = active and Theme.TextPrimary or Theme.TextSecondary
+            })
+        end
+        connect(button.MouseEnter, function() focus(true) end)
+        connect(button.MouseLeave, function() focus(false) end)
+        connect(button.SelectionGained, function() focus(true) end)
+        connect(button.SelectionLost, function() focus(false) end)
+        return button
     end
+
+    local minimize = titleButton("Minimize", "—", -44, 14)
+    local close = titleButton("Close", "×", -4, 18)
 
     local leftPanel = Instance.new("Frame")
     leftPanel.Name = "Navigation"
     leftPanel.BackgroundColor3 = Theme.Surface or Theme.PanelBackground
-    leftPanel.BackgroundTransparency = 0.5
+    leftPanel.BackgroundTransparency = Theme.GlassTransparency or 0.2
+    leftPanel.BorderSizePixel = 0
+    leftPanel.ClipsDescendants = true
     leftPanel.Parent = main
+    corner(leftPanel, cardRadius)
+    stroke(leftPanel, Theme, Theme.PanelStrokeTransparency)
 
     local tabContainer = Instance.new("ScrollingFrame")
     tabContainer.Name = "Tabs"
     tabContainer.BackgroundTransparency = 1
     tabContainer.BorderSizePixel = 0
     tabContainer.ScrollBarThickness = 2
-    tabContainer.ScrollBarImageColor3 = Theme.Accent
+    tabContainer.ScrollBarImageColor3 = Theme.TextMuted
+    tabContainer.ScrollBarImageTransparency = Theme.ScrollBarTransparency or 0.55
     tabContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
     tabContainer.CanvasSize = UDim2.new()
     tabContainer.ScrollingDirection = Enum.ScrollingDirection.Y
@@ -160,77 +183,107 @@ function Window.new(options)
     local tabLayout = Instance.new("UIListLayout")
     tabLayout.FillDirection = Enum.FillDirection.Vertical
     tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    tabLayout.VerticalAlignment = Enum.VerticalAlignment.Top
     tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
     tabLayout.Padding = UDim.new(0, 6)
     tabLayout.Parent = tabContainer
 
     local tabPadding = Instance.new("UIPadding")
-    tabPadding.PaddingTop = UDim.new(0, 10)
-    tabPadding.PaddingBottom = UDim.new(0, 10)
+    tabPadding.PaddingTop = UDim.new(0, 8)
+    tabPadding.PaddingBottom = UDim.new(0, 8)
     tabPadding.Parent = tabContainer
 
     local rightPanel = Instance.new("Frame")
     rightPanel.Name = "Content"
-    rightPanel.BackgroundTransparency = 1
+    rightPanel.BackgroundColor3 = Theme.Surface or Theme.PanelBackground
+    rightPanel.BackgroundTransparency = Theme.ContentTransparency or 0.42
+    rightPanel.BorderSizePixel = 0
+    rightPanel.ClipsDescendants = true
     rightPanel.Parent = main
+    corner(rightPanel, cardRadius)
+    stroke(rightPanel, Theme, Theme.PanelStrokeTransparency)
 
-    local divider = Instance.new("Frame")
-    divider.Name = "Divider"
-    divider.BackgroundColor3 = Theme.Stroke
-    divider.BackgroundTransparency = Theme.StrokeTransparency
-    divider.Parent = main
+    local function applyMinimized(value, animate)
+        minimized = value
+        minimize.Text = minimized and "+" or "—"
+        if not minimized then
+            leftPanel.Visible = true
+            rightPanel.Visible = true
+        end
+        local target = minimized and UDim2.fromOffset(resolvedSize.X, 62) or UDim2.fromOffset(resolvedSize.X, resolvedSize.Y)
+        if animate then
+            Utils.tween(main, TweenInfo.new(0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Size = target})
+            if minimized then
+                task.delay(0.2, function()
+                    if minimized and main.Parent then
+                        leftPanel.Visible = false
+                        rightPanel.Visible = false
+                    end
+                end)
+            end
+        else
+            main.Size = target
+            leftPanel.Visible = not minimized
+            rightPanel.Visible = not minimized
+        end
+    end
 
-    local resolvedSize = Vector2.new(600, 380)
     local function resolveSize()
         camera = workspace.CurrentCamera or camera
         local viewport = camera and camera.ViewportSize or Vector2.new(800, 600)
-        local width = requestedSize.X.Scale * viewport.X + requestedSize.X.Offset
-        local height = requestedSize.Y.Scale * viewport.Y + requestedSize.Y.Offset
-        width = math.clamp(width, math.min(320, viewport.X - 16), math.max(100, viewport.X - 16))
-        height = math.clamp(height, math.min(260, viewport.Y - 16), math.max(100, viewport.Y - 16))
+        local availableWidth = math.max(100, viewport.X - 24)
+        local availableHeight = math.max(100, viewport.Y - 24)
+        local desiredWidth = requestedSize.X.Scale * viewport.X + requestedSize.X.Offset
+        local desiredHeight = requestedSize.Y.Scale * viewport.Y + requestedSize.Y.Offset
+        local width = math.clamp(desiredWidth, math.min(320, availableWidth), availableWidth)
+        local height = math.clamp(desiredHeight, math.min(250, availableHeight), availableHeight)
         resolvedSize = Vector2.new(width, height)
-        compact = width < 520
+        self.compact = width < (options.CompactBreakpoint or 430)
 
-        if not minimized then main.Size = UDim2.fromOffset(width, height) end
-        if compact then
-            leftPanel.Position = UDim2.fromOffset(0, 48)
-            leftPanel.Size = UDim2.new(1, 0, 0, 48)
-            tabContainer.Position = UDim2.fromOffset(8, 0)
-            tabContainer.Size = UDim2.new(1, -16, 1, 0)
+        main.Size = minimized and UDim2.fromOffset(width, 62) or UDim2.fromOffset(width, height)
+        if self.compact then
+            leftPanel.Position = UDim2.fromOffset(10, 60)
+            leftPanel.Size = UDim2.new(1, -20, 0, 50)
+            tabContainer.Position = UDim2.fromOffset(6, 0)
+            tabContainer.Size = UDim2.new(1, -12, 1, 0)
             tabContainer.AutomaticCanvasSize = Enum.AutomaticSize.X
             tabContainer.ScrollingDirection = Enum.ScrollingDirection.X
             tabLayout.FillDirection = Enum.FillDirection.Horizontal
-            tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
             tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-            rightPanel.Position = UDim2.fromOffset(0, 96)
-            rightPanel.Size = UDim2.new(1, 0, 1, -96)
-            divider.Position = UDim2.fromOffset(10, 95)
-            divider.Size = UDim2.new(1, -20, 0, 1)
+            tabLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+            tabPadding.PaddingTop = UDim.new(0, 0)
+            tabPadding.PaddingBottom = UDim.new(0, 0)
+            rightPanel.Position = UDim2.fromOffset(10, 118)
+            rightPanel.Size = UDim2.new(1, -20, 1, -128)
         else
-            leftPanel.Position = UDim2.fromOffset(0, 48)
-            leftPanel.Size = UDim2.new(0, 152, 1, -48)
+            leftPanel.Position = UDim2.fromOffset(10, 60)
+            leftPanel.Size = UDim2.new(0, 138, 1, -70)
             tabContainer.Position = UDim2.new()
             tabContainer.Size = UDim2.fromScale(1, 1)
             tabContainer.AutomaticCanvasSize = Enum.AutomaticSize.Y
             tabContainer.ScrollingDirection = Enum.ScrollingDirection.Y
             tabLayout.FillDirection = Enum.FillDirection.Vertical
             tabLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-            rightPanel.Position = UDim2.fromOffset(152, 48)
-            rightPanel.Size = UDim2.new(1, -152, 1, -48)
-            divider.Position = UDim2.fromOffset(151, 58)
-            divider.Size = UDim2.new(0, 1, 1, -68)
+            tabLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+            tabPadding.PaddingTop = UDim.new(0, 8)
+            tabPadding.PaddingBottom = UDim.new(0, 8)
+            rightPanel.Position = UDim2.fromOffset(156, 60)
+            rightPanel.Size = UDim2.new(1, -166, 1, -70)
         end
 
         for _, tab in ipairs(self.tabs) do
-            if tab.updateLayout then tab.updateLayout(compact) end
+            if tab.updateLayout then tab.updateLayout(self.compact) end
         end
+        task.defer(function()
+            if main.Parent then Drag.clampToViewport(main, 12) end
+        end)
     end
     resolveSize()
 
     local function showToggle()
         if state ~= "closed" or not uis.TouchEnabled then return end
         btnToggle.Visible = true
-        Utils.tween(btnToggle, TweenInfo.new(0.2), {BackgroundTransparency = 0.08})
+        Utils.tween(btnToggle, TweenInfo.new(0.18), {BackgroundTransparency = Theme.GlassTransparency or 0.12})
     end
 
     local function openWindow()
@@ -238,16 +291,14 @@ function Window.new(options)
         if state == "open" then return true end
         isAnimating = true
         state = "open"
-        minimized = false
+        applyMinimized(false, false)
         resolveSize()
         btnToggle.Visible = false
         main.Visible = true
-        main.Size = UDim2.fromOffset(resolvedSize.X - 18, resolvedSize.Y - 18)
+        scale.Scale = 0.96
         main.BackgroundTransparency = 1
-        Utils.tween(main, TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
-            Size = UDim2.fromOffset(resolvedSize.X, resolvedSize.Y),
-            BackgroundTransparency = Theme.BackgroundTransparency
-        }).Completed:Wait()
+        Utils.tween(scale, TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {Scale = 1})
+        Utils.tween(main, TweenInfo.new(0.2), {BackgroundTransparency = Theme.BackgroundTransparency}).Completed:Wait()
         isAnimating = false
         return true
     end
@@ -255,12 +306,10 @@ function Window.new(options)
     local function hideWindow()
         if state ~= "open" or isAnimating then return false end
         isAnimating = true
-        Utils.tween(main, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-            Size = UDim2.fromOffset(math.max(100, main.AbsoluteSize.X - 14), math.max(48, main.AbsoluteSize.Y - 14)),
-            BackgroundTransparency = 1
-        }).Completed:Wait()
+        Utils.tween(scale, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0.96})
+        Utils.tween(main, TweenInfo.new(0.16), {BackgroundTransparency = 1}).Completed:Wait()
         main.Visible = false
-        minimized = false
+        applyMinimized(false, false)
         state = "closed"
         isAnimating = false
         showToggle()
@@ -275,14 +324,20 @@ function Window.new(options)
 
     connect(close.Activated, hideWindow)
     connect(minimize.Activated, function()
-        if state ~= "open" or isAnimating then return end
-        minimized = not minimized
-        leftPanel.Visible = not minimized
-        rightPanel.Visible = not minimized
-        divider.Visible = not minimized
-        minimize.Text = minimized and "+" or "—"
-        local target = minimized and UDim2.fromOffset(resolvedSize.X, 48) or UDim2.fromOffset(resolvedSize.X, resolvedSize.Y)
-        Utils.tween(main, TweenInfo.new(0.22, Enum.EasingStyle.Quart), {Size = target})
+        if state == "open" and not isAnimating then applyMinimized(not minimized, true) end
+    end)
+
+    connect(btnToggle.MouseEnter, function()
+        Utils.tween(toggleStroke, TweenInfo.new(0.14), {Transparency = Theme.FocusStrokeTransparency or 0.35})
+    end)
+    connect(btnToggle.MouseLeave, function()
+        Utils.tween(toggleStroke, TweenInfo.new(0.14), {Transparency = Theme.BorderTransparency or 0.82})
+    end)
+    connect(btnToggle.SelectionGained, function()
+        Utils.tween(toggleStroke, TweenInfo.new(0.14), {Transparency = Theme.FocusStrokeTransparency or 0.35})
+    end)
+    connect(btnToggle.SelectionLost, function()
+        Utils.tween(toggleStroke, TweenInfo.new(0.14), {Transparency = Theme.BorderTransparency or 0.82})
     end)
 
     local toggleDragged = false
@@ -293,13 +348,11 @@ function Window.new(options)
         if toggleDragged then toggleDragged = false return end
         toggleWindow()
     end)
-    for _, connection in ipairs(Drag.makeDraggable(titleBar, main)) do table.insert(connections, connection) end
+    for _, connection in ipairs(Drag.makeDraggable(brand, main)) do table.insert(connections, connection) end
 
     connect(uis.InputBegan, function(input, gameProcessed)
         if gameProcessed then return end
-        if input.KeyCode == toggleKey or input.KeyCode == gamepadKey then
-            toggleWindow()
-        end
+        if input.KeyCode == toggleKey or input.KeyCode == gamepadKey then toggleWindow() end
     end)
 
     local viewportConnection
@@ -342,77 +395,81 @@ function Window.new(options)
         intro.Name = "Intro"
         intro.AnchorPoint = Vector2.new(0.5, 0.5)
         intro.Position = UDim2.fromScale(0.5, 0.5)
-        intro.Size = UDim2.fromOffset(286, 132)
+        intro.Size = UDim2.new(1, -32, 0, 124)
         intro.BackgroundColor3 = Theme.Background
         intro.BackgroundTransparency = 1
+        intro.BorderSizePixel = 0
         intro.Parent = gui
-
-        local introCorner = Instance.new("UICorner")
-        introCorner.CornerRadius = Theme.WindowCornerRadius
-        introCorner.Parent = intro
-        local introStroke = Instance.new("UIStroke")
-        introStroke.Color = Theme.Accent
-        introStroke.Transparency = 1
-        introStroke.Parent = intro
+        corner(intro, windowRadius)
+        local introConstraint = Instance.new("UISizeConstraint")
+        introConstraint.MaxSize = Vector2.new(310, 124)
+        introConstraint.Parent = intro
+        local introStroke = stroke(intro, Theme, 1)
 
         local logo = Instance.new("TextLabel")
-        logo.Size = UDim2.new(1, -32, 0, 32)
-        logo.Position = UDim2.fromOffset(16, 22)
+        logo.Size = UDim2.new(1, -32, 0, 28)
+        logo.Position = UDim2.fromOffset(16, 20)
         logo.BackgroundTransparency = 1
         logo.Text = titleText:upper()
         logo.TextColor3 = Theme.TextPrimary
         logo.TextTransparency = 1
         logo.Font = Theme.FontBold
-        logo.TextSize = 20
+        logo.TextSize = 18
         logo.TextXAlignment = Enum.TextXAlignment.Left
         logo.TextTruncate = Enum.TextTruncate.AtEnd
         logo.Parent = intro
 
         local status = Instance.new("TextLabel")
         status.Size = UDim2.new(1, -32, 0, 18)
-        status.Position = UDim2.fromOffset(16, 58)
+        status.Position = UDim2.fromOffset(16, 52)
         status.BackgroundTransparency = 1
         status.Text = options.IntroText or "Preparing interface"
         status.TextColor3 = Theme.TextMuted
         status.TextTransparency = 1
         status.Font = Theme.FontMedium
-        status.TextSize = 12
+        status.TextSize = 11
         status.TextXAlignment = Enum.TextXAlignment.Left
+        status.TextTruncate = Enum.TextTruncate.AtEnd
         status.Parent = intro
 
         local track = Instance.new("Frame")
         track.Size = UDim2.new(1, -32, 0, 4)
-        track.Position = UDim2.new(0, 16, 1, -28)
+        track.Position = UDim2.new(0, 16, 1, -24)
         track.BackgroundColor3 = Theme.SecondaryBackground
         track.BackgroundTransparency = 1
+        track.BorderSizePixel = 0
         track.Parent = intro
-        local trackCorner = Instance.new("UICorner")
-        trackCorner.CornerRadius = UDim.new(1, 0)
-        trackCorner.Parent = track
+        corner(track, UDim.new(1, 0))
+
         local fill = Instance.new("Frame")
         fill.Size = UDim2.new(0, 0, 1, 0)
         fill.BackgroundColor3 = Theme.Accent
+        fill.BackgroundTransparency = 1
+        fill.BorderSizePixel = 0
         fill.Parent = track
-        local fillCorner = trackCorner:Clone()
-        fillCorner.Parent = fill
+        corner(fill, UDim.new(1, 0))
 
         task.wait(0.1)
         if state == "destroyed" then return end
-        Utils.tween(intro, TweenInfo.new(0.25), {BackgroundTransparency = Theme.BackgroundTransparency})
-        Utils.tween(introStroke, TweenInfo.new(0.25), {Transparency = 0.55})
-        Utils.tween(logo, TweenInfo.new(0.25), {TextTransparency = 0})
-        Utils.tween(status, TweenInfo.new(0.25), {TextTransparency = 0})
-        Utils.tween(track, TweenInfo.new(0.25), {BackgroundTransparency = 0})
-        Utils.tween(fill, TweenInfo.new(options.IntroDuration or 1.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Utils.tween(intro, TweenInfo.new(0.22), {BackgroundTransparency = Theme.BackgroundTransparency})
+        Utils.tween(introStroke, TweenInfo.new(0.22), {Transparency = Theme.StrokeTransparency})
+        Utils.tween(logo, TweenInfo.new(0.22), {TextTransparency = 0})
+        Utils.tween(status, TweenInfo.new(0.22), {TextTransparency = 0})
+        Utils.tween(track, TweenInfo.new(0.22), {BackgroundTransparency = 0})
+        Utils.tween(fill, TweenInfo.new(0.18), {BackgroundTransparency = 0})
+        Utils.tween(fill, TweenInfo.new(options.IntroDuration or 1.1, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
             Size = UDim2.fromScale(1, 1)
         }).Completed:Wait()
         if state == "destroyed" then return end
         status.Text = "Ready"
-        task.wait(0.18)
-        Utils.tween(intro, TweenInfo.new(0.2), {BackgroundTransparency = 1})
+        task.wait(0.2)
+        Utils.tween(intro, TweenInfo.new(0.18), {BackgroundTransparency = 1})
+        Utils.tween(introStroke, TweenInfo.new(0.18), {Transparency = 1})
         Utils.tween(logo, TweenInfo.new(0.18), {TextTransparency = 1})
         Utils.tween(status, TweenInfo.new(0.18), {TextTransparency = 1})
-        task.wait(0.2)
+        Utils.tween(track, TweenInfo.new(0.18), {BackgroundTransparency = 1})
+        Utils.tween(fill, TweenInfo.new(0.18), {BackgroundTransparency = 1})
+        task.wait(0.18)
         intro:Destroy()
 
         state = "closed"

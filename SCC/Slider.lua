@@ -49,7 +49,7 @@ function Slider.new(parent, name, minVal, maxVal, defaultVal, formatFunc, cb)
 	local formatVal = type(formatFunc) == "function" and formatFunc or function(value) return tostring(value) end
 	local uis = Utils.safeSvc("UserInputService")
 	local connections, disabled, sliding, dragInput = {}, false, false, nil
-	local currentVal = defaultVal
+	local hovered, selected, currentVal = false, false, defaultVal
 	local function connect(signal, fn)
 		local connection = signal:Connect(fn)
 		table.insert(connections, connection)
@@ -57,61 +57,109 @@ function Slider.new(parent, name, minVal, maxVal, defaultVal, formatFunc, cb)
 	end
 
 	local frm = Instance.new("Frame")
-	frm.Size = UDim2.new(1, 0, 0, desc and 76 or 62)
-	frm.BackgroundColor3 = Theme.PanelBackground
+	frm.Size = UDim2.new(1, 0, 0, 58)
+	frm.AutomaticSize = Enum.AutomaticSize.Y
+	frm.BackgroundColor3 = Theme.Surface or Theme.PanelBackground
 	frm.BackgroundTransparency = Theme.PanelTransparency
+	frm.BorderSizePixel = 0
 	frm.Parent = container
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = Theme.CornerRadius
+	corner.CornerRadius = Theme.CardCornerRadius or UDim.new(0, 14)
 	corner.Parent = frm
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = Theme.Stroke
 	stroke.Transparency = Theme.PanelStrokeTransparency
 	stroke.Parent = frm
 
+	local content = Instance.new("Frame")
+	content.Size = UDim2.new(1, 0, 0, 58)
+	content.AutomaticSize = Enum.AutomaticSize.Y
+	content.BackgroundTransparency = 1
+	content.BorderSizePixel = 0
+	content.Parent = frm
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 3)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = content
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 10)
+	padding.PaddingBottom = UDim.new(0, 9)
+	padding.PaddingLeft = UDim.new(0, 14)
+	padding.PaddingRight = UDim.new(0, 14)
+	padding.Parent = content
+
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, -32, 0, 22)
-	lbl.Position = UDim2.new(0, 16, 0, 8)
+	lbl.Size = UDim2.new(1, 0, 0, 0)
+	lbl.AutomaticSize = Enum.AutomaticSize.Y
 	lbl.BackgroundTransparency = 1
+	lbl.BorderSizePixel = 0
 	lbl.TextColor3 = Theme.TextSecondary
 	lbl.Font = Theme.FontMedium
 	lbl.TextSize = 13
 	lbl.TextWrapped = true
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.Parent = frm
+	lbl.TextYAlignment = Enum.TextYAlignment.Top
+	lbl.LayoutOrder = 1
+	lbl.Parent = content
 
 	if desc then
 		local description = Instance.new("TextLabel")
-		description.Size = UDim2.new(1, -32, 0, 18)
-		description.Position = UDim2.new(0, 16, 0, 29)
+		description.Size = UDim2.new(1, 0, 0, 0)
+		description.AutomaticSize = Enum.AutomaticSize.Y
 		description.BackgroundTransparency = 1
+		description.BorderSizePixel = 0
 		description.Text = tostring(desc)
 		description.TextColor3 = Theme.TextMuted
 		description.Font = Theme.FontMedium
 		description.TextSize = 11
 		description.TextWrapped = true
 		description.TextXAlignment = Enum.TextXAlignment.Left
-		description.Parent = frm
+		description.TextYAlignment = Enum.TextYAlignment.Top
+		description.LayoutOrder = 2
+		description.Parent = content
 	end
 
+	local rail = Instance.new("Frame")
+	rail.Size = UDim2.new(1, 0, 0, 20)
+	rail.BackgroundTransparency = 1
+	rail.BorderSizePixel = 0
+	rail.LayoutOrder = 3
+	rail.Parent = content
 	local bar = Instance.new("Frame")
-	bar.Size = UDim2.new(1, -32, 0, 8)
-	bar.Position = UDim2.new(0, 16, 1, -18)
+	bar.Size = UDim2.new(1, -8, 0, 6)
+	bar.AnchorPoint = Vector2.new(0.5, 0.5)
+	bar.Position = UDim2.fromScale(0.5, 0.5)
 	bar.BackgroundColor3 = Theme.SecondaryBackground
-	bar.Parent = frm
+	bar.BorderSizePixel = 0
+	bar.Parent = rail
 	local barCorner = Instance.new("UICorner")
-	barCorner.CornerRadius = UDim.new(1, 0)
+	barCorner.CornerRadius = Theme.PillCornerRadius or UDim.new(1, 0)
 	barCorner.Parent = bar
 	local fill = Instance.new("Frame")
 	fill.BackgroundColor3 = Theme.Accent
+	fill.BorderSizePixel = 0
 	fill.Parent = bar
 	local fillCorner = Instance.new("UICorner")
-	fillCorner.CornerRadius = UDim.new(1, 0)
+	fillCorner.CornerRadius = Theme.PillCornerRadius or UDim.new(1, 0)
 	fillCorner.Parent = fill
+	local thumb = Instance.new("Frame")
+	thumb.Size = UDim2.fromOffset(14, 14)
+	thumb.AnchorPoint = Vector2.new(0.5, 0.5)
+	thumb.BackgroundColor3 = Theme.Accent
+	thumb.BorderSizePixel = 0
+	thumb.Parent = bar
+	local thumbCorner = Instance.new("UICorner")
+	thumbCorner.CornerRadius = Theme.PillCornerRadius or UDim.new(1, 0)
+	thumbCorner.Parent = thumb
+	local thumbStroke = Instance.new("UIStroke")
+	thumbStroke.Color = Theme.Background
+	thumbStroke.Transparency = 0.35
+	thumbStroke.Parent = thumb
 
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.fromScale(1, 1)
 	btn.BackgroundTransparency = 1
+	btn.BorderSizePixel = 0
 	btn.Text = ""
 	btn.AutoButtonColor = false
 	btn.Selectable = true
@@ -123,7 +171,9 @@ function Slider.new(parent, name, minVal, maxVal, defaultVal, formatFunc, cb)
 	end
 	currentVal = quantize(currentVal)
 	local function render()
-		fill.Size = UDim2.new((currentVal - minVal) / (maxVal - minVal), 0, 1, 0)
+		local ratio = (currentVal - minVal) / (maxVal - minVal)
+		fill.Size = UDim2.new(ratio, 0, 1, 0)
+		thumb.Position = UDim2.new(ratio, 0, 0.5, 0)
 		lbl.Text = tostring(name) .. ": " .. tostring(formatVal(currentVal))
 	end
 	local function set(value, fire)
@@ -139,23 +189,25 @@ function Slider.new(parent, name, minVal, maxVal, defaultVal, formatFunc, cb)
 		local percent = math.clamp((x - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
 		set(minVal + (maxVal - minVal) * percent, true)
 	end
-	local function focused(on)
-		if disabled then return end
-		frm.BackgroundColor3 = on and Theme.SecondaryBackground or Theme.PanelBackground
-		lbl.TextColor3 = on and Theme.TextPrimary or Theme.TextSecondary
+	local function refresh()
+		local on = not disabled and (hovered or selected or sliding)
+		frm.BackgroundColor3 = on and (Theme.SurfaceHover or Theme.SecondaryBackground) or (Theme.Surface or Theme.PanelBackground)
+		lbl.TextColor3 = disabled and Theme.TextMuted or (on and Theme.TextPrimary or Theme.TextSecondary)
 		fill.BackgroundColor3 = on and (Theme.AccentHover or Theme.Accent) or Theme.Accent
-		stroke.Color = on and Theme.Accent or Theme.Stroke
+		thumb.BackgroundColor3 = on and (Theme.AccentHover or Theme.Accent) or Theme.Accent
+		stroke.Transparency = on and (Theme.HoverStrokeTransparency or 0.5) or Theme.PanelStrokeTransparency
 	end
 
-	connect(btn.MouseEnter, function() focused(true) end)
-	connect(btn.MouseLeave, function() focused(false) end)
-	connect(btn.SelectionGained, function() focused(true) end)
-	connect(btn.SelectionLost, function() focused(false) end)
+	connect(btn.MouseEnter, function() hovered = true refresh() end)
+	connect(btn.MouseLeave, function() hovered = false refresh() end)
+	connect(btn.SelectionGained, function() selected = true refresh() end)
+	connect(btn.SelectionLost, function() selected = false refresh() end)
 	connect(btn.InputBegan, function(input)
 		if disabled then return end
 		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 			sliding, dragInput = true, input
 			updateAt(input.Position.X)
+			refresh()
 		elseif input.KeyCode == Enum.KeyCode.Left or input.KeyCode == Enum.KeyCode.DPadLeft or input.KeyCode == Enum.KeyCode.Down or input.KeyCode == Enum.KeyCode.DPadDown then
 			set(currentVal - step, true)
 		elseif input.KeyCode == Enum.KeyCode.Right or input.KeyCode == Enum.KeyCode.DPadRight or input.KeyCode == Enum.KeyCode.Up or input.KeyCode == Enum.KeyCode.DPadUp then
@@ -170,6 +222,7 @@ function Slider.new(parent, name, minVal, maxVal, defaultVal, formatFunc, cb)
 	connect(uis.InputEnded, function(input)
 		if input == dragInput or (sliding and input.UserInputType == Enum.UserInputType.MouseButton1) then
 			sliding, dragInput = false, nil
+			refresh()
 		end
 	end)
 	render()
@@ -182,9 +235,9 @@ function Slider.new(parent, name, minVal, maxVal, defaultVal, formatFunc, cb)
 		btn.Active = not disabled
 		btn.Selectable = not disabled
 		sliding, dragInput = false, nil
-		lbl.TextColor3 = disabled and Theme.TextMuted or Theme.TextSecondary
 		fill.BackgroundTransparency = disabled and 0.45 or 0
-		stroke.Color = Theme.Stroke
+		thumb.BackgroundTransparency = disabled and 0.35 or 0
+		refresh()
 	end
 	function self.destroy()
 		for _, connection in ipairs(connections) do connection:Disconnect() end

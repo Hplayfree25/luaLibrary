@@ -22,31 +22,33 @@ function Label.new(parent, text)
 	local frm = Instance.new("Frame")
 	frm.Size = UDim2.new(1, 0, 0, 0)
 	frm.AutomaticSize = Enum.AutomaticSize.Y
-	frm.BackgroundColor3 = Theme.PanelBackground
+	frm.BackgroundColor3 = Theme.Surface or Theme.PanelBackground
 	frm.BackgroundTransparency = Theme.PanelTransparency
+	frm.BorderSizePixel = 0
 	frm.Parent = container
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = Theme.CornerRadius
+	corner.CornerRadius = Theme.CardCornerRadius or UDim.new(0, 14)
 	corner.Parent = frm
 	local stroke = Instance.new("UIStroke")
 	stroke.Color = Theme.Stroke
 	stroke.Transparency = Theme.PanelStrokeTransparency
 	stroke.Parent = frm
 	local layout = Instance.new("UIListLayout")
-	layout.Padding = UDim.new(0, 5)
+	layout.Padding = UDim.new(0, 4)
 	layout.SortOrder = Enum.SortOrder.LayoutOrder
 	layout.Parent = frm
 	local padding = Instance.new("UIPadding")
-	padding.PaddingTop = UDim.new(0, 12)
-	padding.PaddingBottom = UDim.new(0, 12)
-	padding.PaddingLeft = UDim.new(0, 16)
-	padding.PaddingRight = UDim.new(0, 16)
+	padding.PaddingTop = UDim.new(0, 11)
+	padding.PaddingBottom = UDim.new(0, 11)
+	padding.PaddingLeft = UDim.new(0, 14)
+	padding.PaddingRight = UDim.new(0, 14)
 	padding.Parent = frm
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.new(1, 0, 0, 0)
 	lbl.AutomaticSize = Enum.AutomaticSize.Y
 	lbl.BackgroundTransparency = 1
+	lbl.BorderSizePixel = 0
 	lbl.Text = tostring(title or "")
 	lbl.TextColor3 = Theme.TextPrimary
 	lbl.Font = Theme.FontMedium
@@ -63,6 +65,7 @@ function Label.new(parent, text)
 		lblDesc.Size = UDim2.new(1, 0, 0, 0)
 		lblDesc.AutomaticSize = Enum.AutomaticSize.Y
 		lblDesc.BackgroundTransparency = 1
+		lblDesc.BorderSizePixel = 0
 		lblDesc.Text = tostring(desc)
 		lblDesc.TextColor3 = Theme.TextMuted
 		lblDesc.Font = Theme.FontMedium
@@ -93,15 +96,22 @@ end
 function Label.section(parent, text)
 	local container, Theme = context(parent)
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, 0, 0, 28)
+	lbl.Size = UDim2.new(1, 0, 0, 0)
+	lbl.AutomaticSize = Enum.AutomaticSize.Y
 	lbl.BackgroundTransparency = 1
+	lbl.BorderSizePixel = 0
 	lbl.Text = tostring(type(text) == "table" and (text.Name or text[1]) or text or "")
 	lbl.TextColor3 = Theme.TextPrimary
 	lbl.Font = Theme.FontBold
 	lbl.TextSize = 12
 	lbl.TextWrapped = true
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.TextYAlignment = Enum.TextYAlignment.Top
 	lbl.Parent = container
+	local padding = Instance.new("UIPadding")
+	padding.PaddingTop = UDim.new(0, 6)
+	padding.PaddingBottom = UDim.new(0, 4)
+	padding.Parent = lbl
 	return {
 		frame = lbl,
 		label = lbl,
@@ -114,8 +124,9 @@ end
 function Label.separator(parent)
 	local container, Theme = context(parent)
 	local frm = Instance.new("Frame")
-	frm.Size = UDim2.new(1, 0, 0, 13)
+	frm.Size = UDim2.new(1, 0, 0, 11)
 	frm.BackgroundTransparency = 1
+	frm.BorderSizePixel = 0
 	frm.Parent = container
 	local line = Instance.new("Frame")
 	line.Size = UDim2.new(1, 0, 0, 1)

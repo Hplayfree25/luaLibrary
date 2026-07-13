@@ -9,6 +9,28 @@ end
 local Utils = import("Utils")
 local uis = Utils.safeSvc("UserInputService")
 
+function Drag.clampToViewport(targetGui, margin)
+    local camera = workspace.CurrentCamera
+    if not camera or targetGui.AbsoluteSize.X <= 0 then return end
+    local viewport = camera.ViewportSize
+    local size = targetGui.AbsoluteSize
+    local anchor = targetGui.AnchorPoint
+    local current = Vector2.new(
+        targetGui.Position.X.Scale * viewport.X + targetGui.Position.X.Offset,
+        targetGui.Position.Y.Scale * viewport.Y + targetGui.Position.Y.Offset
+    )
+    margin = margin or 8
+    local minimum = Vector2.new(margin + size.X * anchor.X, margin + size.Y * anchor.Y)
+    local maximum = Vector2.new(
+        math.max(minimum.X, viewport.X - margin - size.X * (1 - anchor.X)),
+        math.max(minimum.Y, viewport.Y - margin - size.Y * (1 - anchor.Y))
+    )
+    targetGui.Position = UDim2.fromOffset(
+        math.clamp(current.X, minimum.X, maximum.X),
+        math.clamp(current.Y, minimum.Y, maximum.Y)
+    )
+end
+
 function Drag.makeDraggable(draggableGui, targetGui, options)
     targetGui = targetGui or draggableGui
     options = options or {}
