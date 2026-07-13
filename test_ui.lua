@@ -1,110 +1,100 @@
 local scriptId = "UniversalUI_TestScript"
-local getGenv = getgenv or function() return _G end
+local env = (getgenv or function() return _G end)()
 
-if getGenv()[scriptId] then
-    pcall(getGenv()[scriptId])
-end
+if env[scriptId] then pcall(env[scriptId]) end
 
 local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hplayfree25/luaLibrary/refs/heads/master/Init.lua?t=" .. tick()))()
-
 local Window = UI.CreateWindow({
     Title = "Universal UI Test",
     ToggleText = "TST",
-    Keybind = Enum.KeyCode.RightControl, -- Contoh kustomisasi keybind
-    Size = UDim2.new(0, 500, 0, 300),
+    Keybind = Enum.KeyCode.RightControl,
+    GamepadKeybind = Enum.KeyCode.ButtonStart,
+    Size = UDim2.fromOffset(560, 380),
     HideOnStartup = true,
     OnIntroCompleted = function(win)
-        UI.CreateAuth({
-            Title = "Faldloudnd's App",
-            Subtitle = "Please enter your KeyAuth license.",
-            KeyPlaceholder = "Enter License Key...",
-            SubmitText = "Verify Key",
-            Links = {
-                {
-                    Name = "Get Key",
-                    Icon = "rbxassetid://10709769508",
-                    OnClick = function(lbl)
-                        print("Opening Get Key link...")
-                        -- setclipboard("https://link-to-key.com")
-                        local oldText = lbl.Text
-                        lbl.Text = "Copied!"
-                        UI.Notify("Success", "Link Copied to Clipboard!", 3)
-                        task.wait(1.5)
-                        lbl.Text = oldText
-                    end
-                },
-                {
-                    Name = "Discord",
-                    Icon = "rbxassetid://14800392398",
-                    OnClick = function()
-                        print("Opening Discord...")
-                        -- setclipboard("https://discord.gg/nmzui")
-                    end
-                }
-            },
-            OnSubmit = function(key, callback)
-                task.spawn(function()
-                    UI.Notify("KeyAuth", "Connecting to server...", 2)
-                    task.wait(1.5)
-                    
-                    -- Here you would put your actual KeyAuth HttpGet request
-                    if key == "KEYAUTH-TEST-123" or key == "NMZUI_PREMIUM" then
-                        callback(true)
-                        win.show()
-                        UI.Notify("KeyAuth", "License validated successfully!", 3)
-                    else
-                        callback(false)
-                        UI.Notify("KeyAuth Error", "Invalid license key.", 3)
-                    end
-                end)
-            end
-        })
+        assert(win.isReady(), "window must be ready after intro")
+        UI.Notify({Title = "SCC Ready", Content = "Press RightControl, Start, or the mobile button.", Duration = 4})
     end
 })
 
-getGenv()[scriptId] = function()
-    if Window then
-        Window.destroy()
-    end
-    getGenv()[scriptId] = nil
+assert(not Window.isReady(), "window must remain locked during intro")
+
+env[scriptId] = function()
+    if Window then Window.destroy() end
+    env[scriptId] = nil
 end
 
-local Tab1 = UI.CreateTab(Window, "MAIN", 1)
-local Tab2 = UI.CreateTab(Window, "SETTINGS", 2)
+local Main = UI.CreateTab(Window, "MAIN", 1)
+local Settings = UI.CreateTab(Window, "SETTINGS", 2)
 
-UI.CreateLabel(Tab1, "Ini adalah Label Biasa")
-UI.CreateLabel(Tab1, {Name = "Informasi Tambahan", Desc = "Label ini mendukung deskripsi juga lho!"})
+UI.CreateSection(Main, "AIM ASSIST")
+UI.CreateLabel(Main, {
+    Name = "Responsive controls",
+    Desc = "Resize or rotate the screen to test the compact navigation layout."
+})
 
-UI.CreateToggle(Tab1, {Name = "Test Toggle", Desc = "Ini adalah contoh deskripsi toggle"}, true, function(state)
-    print("Toggle state changed to:", state)
+local toggle = UI.CreateToggle(Main, {
+    Name = "Test Toggle",
+    Desc = "Supports mouse, touch, keyboard, and gamepad."
+}, true, function(state)
+    print("Toggle state:", state)
+end)
+assert(toggle.get() == true, "toggle default mismatch")
+
+UI.CreateKeybind(Main, {
+    Name = "Action Hotkey",
+    Desc = "Select this control to capture a new key."
+}, Enum.KeyCode.E, function()
+    UI.Notify({Title = "Keybind", Content = "Action hotkey triggered.", Duration = 3})
 end)
 
-UI.CreateKeybind(Tab1, {Name = "Aimbot Hotkey", Desc = "Tekan tombol ini untuk mengaktifkan fitur"}, Enum.KeyCode.E, function()
-    UI.Notify("Keybind Triggered", "Kamu menekan hotkey Aimbot!", 3)
+local slider = UI.CreateSlider(Main, {
+    Name = "Test Slider",
+    Desc = "Arrow keys and D-pad adjust the selected slider.",
+    Min = 0,
+    Max = 100,
+    Default = 50,
+    Step = 5,
+    Format = function(value) return tostring(math.floor(value)) end,
+}, function(value)
+    print("Slider value:", value)
 end)
+assert(slider.get() == 50, "slider default mismatch")
 
-UI.CreateSlider(Tab1, "Test Slider", 0, 100, 50, function(v) return tostring(math.floor(v)) end, function(v)
-    print("Slider value changed to:", v)
-end)
-
-UI.CreateDropdown(Tab1, "Test Dropdown", {
+local dropdown = UI.CreateDropdown(Main, "Test Dropdown", {
     {name = "Option A", val = "A"},
     {name = "Option B", val = "B"},
     {name = "Option C", val = "C"}
-}, 1, function(val)
-    print("Dropdown selection changed to:", val)
+}, 1, function(value)
+    print("Dropdown selection:", value)
+end)
+assert(dropdown.get() == "A", "dropdown default mismatch")
+
+UI.CreateSeparator(Main)
+
+UI.CreateSection(Settings, "INPUT & ACTIONS")
+local textbox = UI.CreateTextbox(Settings, "Test Textbox", "Type something...", function(text, enterPressed)
+    print("Textbox:", text, "| Enter:", enterPressed)
+end)
+textbox.set("SCC responsive test")
+assert(textbox.get() == "SCC responsive test", "textbox setter mismatch")
+
+UI.CreateButton(Settings, {
+    Name = "Send Notification",
+    Desc = "Shows a responsive notification with automatic text height."
+}, function()
+    UI.Notify({
+        Title = "Universal UI",
+        Content = "This notification adapts to narrow screens and longer wrapped content.",
+        Duration = 4
+    })
 end)
 
-UI.CreateTextbox(Tab2, "Test Textbox", "Type something...", function(text, enterPressed)
-    print("Textbox text changed to:", text, "| Enter pressed:", enterPressed)
+local disabled = UI.CreateButton(Settings, "Disabled Button", function()
+    error("disabled button should not run")
 end)
+disabled.setDisabled(true)
 
-UI.CreateButton(Tab2, {Name = "Send Test Notification", Desc = "Munculkan notif percobaan"}, function()
-    UI.Notify("Universal UI", "This is a clean, modern notification toast!", 4)
-end)
-
-UI.CreateButton(Tab2, "Unload Script", function()
-    if getGenv()[scriptId] then
-        getGenv()[scriptId]()
-    end
+UI.CreateButton(Settings, "Unload Script", function()
+    if env[scriptId] then env[scriptId]() end
 end)

@@ -9,24 +9,18 @@ end
 local moduleCache = {}
 
 local function getModule(name)
-    if moduleCache[name] then
-        return moduleCache[name]
-    end
-    
+    if moduleCache[name] then return moduleCache[name] end
+
     local module
     if isVirtual then
         local baseUrl = "https://raw.githubusercontent.com/Hplayfree25/luaLibrary/refs/heads/master/SCC/"
-        local code = game:HttpGet(baseUrl .. name .. ".lua")
-        module = loadstring(code)()
+        module = loadstring(game:HttpGet(baseUrl .. name .. ".lua"))()
     else
         local obj = script:FindFirstChild(name) or script.Parent:FindFirstChild(name)
-        if obj then
-            module = require(obj)
-        else
-            error("Module " .. name .. " not found!")
-        end
+        if not obj then error("Module " .. name .. " not found!") end
+        module = require(obj)
     end
-    
+
     moduleCache[name] = module
     return module
 end
@@ -41,6 +35,13 @@ Lib.Components = getModule("Components")
 Lib.Notification = getModule("Notification")
 Lib.Auth = getModule("Auth")
 
+local function register(tab, control)
+    if tab and tab.window and control then
+        table.insert(tab.window.controls, control)
+    end
+    return control
+end
+
 function Lib.CreateWindow(options)
     return Lib.Window.new(options)
 end
@@ -50,31 +51,39 @@ function Lib.CreateTab(window, name, order)
 end
 
 function Lib.CreateButton(tab, name, cb)
-    return Lib.Components.Button.new(tab.container, name, cb)
+    return register(tab, Lib.Components.Button.new(tab, name, cb))
 end
 
 function Lib.CreateToggle(tab, name, defaultState, cb)
-    return Lib.Components.Toggle.new(tab.container, name, defaultState, cb)
+    return register(tab, Lib.Components.Toggle.new(tab, name, defaultState, cb))
 end
 
 function Lib.CreateSlider(tab, name, minVal, maxVal, defaultVal, formatFunc, cb)
-    return Lib.Components.Slider.new(tab.container, name, minVal, maxVal, defaultVal, formatFunc, cb)
+    return register(tab, Lib.Components.Slider.new(tab, name, minVal, maxVal, defaultVal, formatFunc, cb))
 end
 
 function Lib.CreateDropdown(tab, name, opts, defaultIdx, cb)
-    return Lib.Components.Dropdown.new(tab.container, name, opts, defaultIdx, cb)
+    return register(tab, Lib.Components.Dropdown.new(tab, name, opts, defaultIdx, cb))
 end
 
 function Lib.CreateTextbox(tab, name, placeholderText, cb)
-    return Lib.Components.Textbox.new(tab.container, name, placeholderText, cb)
+    return register(tab, Lib.Components.Textbox.new(tab, name, placeholderText, cb))
 end
 
 function Lib.CreateLabel(tab, name)
-    return Lib.Components.Label.new(tab.container, name)
+    return register(tab, Lib.Components.Label.new(tab, name))
+end
+
+function Lib.CreateSection(tab, name)
+    return register(tab, Lib.Components.Label.section(tab, name))
+end
+
+function Lib.CreateSeparator(tab)
+    return register(tab, Lib.Components.Label.separator(tab))
 end
 
 function Lib.CreateKeybind(tab, name, defaultKey, cb)
-    return Lib.Components.Keybind.new(tab.container, name, defaultKey, cb)
+    return register(tab, Lib.Components.Keybind.new(tab, name, defaultKey, cb))
 end
 
 function Lib.Notify(config)
