@@ -35,6 +35,12 @@ local isExecutorSupported = true
 if type(hookfunction) ~= "function" then
     isExecutorSupported = false
 end
+local executorName = (identifyexecutor or getexecutorname or function() return "" end)()
+local isVelocityOrSimilar = false
+if string.find(string.lower(executorName), "velocity") or string.find(string.lower(executorName), "solara") or string.find(string.lower(executorName), "xeno") then
+    isExecutorSupported = false
+    isVelocityOrSimilar = true
+end
 
 local cloneref = cloneref or function(i: Instance) return i; end;
 local clonefunction = clonefunction or function(f: (...any) -> (...any)) return f; end;
@@ -57,7 +63,14 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
-if getconnections then
+-- ponytail: TouchEnabled matches the UI lib's own mobile detection; on touch-laptops the
+-- extra AIM button is harmless since right-click aim still works. Upgrade: AND not MouseEnabled.
+local isMobile = UserInputService.TouchEnabled
+local mobileAimHolding = false
+local mobileAimGui = nil
+local mobileAimBtn = nil
+
+if getconnections and not isVelocityOrSimilar then
     for _, conn in pairs(getconnections(game:GetService("ScriptContext").Error)) do
         if type(conn) == "table" and conn.Disable then pcall(conn.Disable, conn) end
     end
@@ -78,6 +91,113 @@ local currentVelocity = nil
 local currentTool = nil
 local reloadConn = nil
 local scriptUnloadedLocal = false
+local silentHookInstalled = false
+
+-- Resolve gun from equip cache OR currently held tool (fixes silent aim after late inject).
+local function resolveGunContext()
+    local tool = currentTool
+    if not tool or not tool.Parent then
+        tool = nil
+        local char = LocalPlayer.Character
+        if char then
+            for _, ch in ipairs(char:GetChildren()) do
+                if ch:IsA("Tool") then
+                    tool = ch
+                    break
+                end
+            end
+        end
+    end
+    local vel = (tool and tool:GetAttribute("Velocity")) or currentVelocity or 500
+    if tool then
+        currentTool = tool
+        currentVelocity = vel
+    end
+    return tool, vel
+end
+
+local function getHeldTool()
+    local char = LocalPlayer.Character
+    if not char then return nil end
+    for _, ch in ipairs(char:GetChildren()) do
+        if ch:IsA("Tool") then return ch end
+    end
+    return nil
+end
+
+-- Exact V1.5 attribute set (same values). Used for late inject / Solara when Equip wrap didn't run yet.
+-- NEVER call Recoil=0 every frame blindly — that fights recovery and pulls aim down.
+local function applyV15GunAttrs(tool)
+    if not tool or not tool:IsA("Tool") then return end
+    currentTool = tool
+    currentVelocity = tool:GetAttribute("Velocity") or currentVelocity or 500
+    if noRecoilEnabled then
+        pcall(function() tool:SetAttribute("Recoil", 0) end)
+    end
+    if noSpreadEnabled then
+        pcall(function()
+            tool:SetAttribute("Spread", 0)
+            tool:SetAttribute("SpreadDefault", 99999999)
+            tool:SetAttribute("MinSpread", 0)
+            tool:SetAttribute("MaxSpread", 0)
+            local b = tool:FindFirstChild("Bloom")
+            if b then b.Value = 0 end
+        end)
+    end
+end
+
+-- Soft multi-executor support (does not replace V1.5 module path):
+-- 1) on equip / late inject: same one-shot attrs as V1.5 Equip
+-- 2) heartbeat: keep spread/bloom only (same as V1.5 recoilThread) + re-zero Recoil ONLY if game rewrote it
+local softGunConn = nil
+local function stopSoftGunSupport()
+    if softGunConn then softGunConn:Disconnect(); softGunConn = nil end
+end
+
+local function bindSoftGunChar(char)
+    if not char then return end
+    local function onTool(ch)
+        if not ch:IsA("Tool") then return end
+        applyV15GunAttrs(ch)
+        pcall(function()
+            ch.Equipped:Connect(function()
+                applyV15GunAttrs(ch)
+            end)
+        end)
+    end
+    for _, ch in ipairs(char:GetChildren()) do onTool(ch) end
+    char.ChildAdded:Connect(onTool)
+end
+
+if LocalPlayer.Character then bindSoftGunChar(LocalPlayer.Character) end
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.defer(bindSoftGunChar, char)
+end)
+
+softGunConn = RunService.Heartbeat:Connect(function()
+    if scriptUnloadedLocal then return end
+    if not noRecoilEnabled and not noSpreadEnabled then return end
+    local tool = getHeldTool()
+    if not tool then return end
+    pcall(function()
+        -- Mirror V1.5 loop spread side only
+        if noSpreadEnabled then
+            tool:SetAttribute("Spread", 0)
+            tool:SetAttribute("SpreadDefault", 99999999)
+            tool:SetAttribute("MinSpread", 0)
+            tool:SetAttribute("MaxSpread", 0)
+            local b = tool:FindFirstChild("Bloom")
+            if b then b.Value = 0 end
+        end
+        -- Recoil: only if game put a non-zero value back (not spam 0→0)
+        if noRecoilEnabled then
+            local r = tool:GetAttribute("Recoil")
+            if r ~= nil and r ~= 0 then
+                tool:SetAttribute("Recoil", 0)
+            end
+        end
+    end)
+end)
 
 local success, wm = pcall(require, ReplicatedStorage:WaitForChild("WeaponModule", 5))
 if success and wm and type(wm) == "table" then
@@ -233,7 +353,9 @@ if success and wm and type(wm) == "table" then
 end
 
 local espEnabled = true
-local espMode = "Highlight"
+local espHighlightEnabled = true
+local espBoxEnabled = false
+local espTracerEnabled = false
 local boxColor = Color3.new(1,1,1)
 local boxColorIndex = 1
 local boxColors = {
@@ -242,6 +364,7 @@ local boxColors = {
     Color3.new(0,1,1)
 }
 local boxColorNames = {"White","Red","Green","Blue","Yellow","Pink","Cyan"}
+local tracerLines = {}
 
 local aimEnabled = true
 local aimKey = Enum.UserInputType.MouseButton2
@@ -265,7 +388,7 @@ local isHoldingTrigger = false
 
 local hitboxEnabled = false
 local hitboxMultiplier = 2.0
-local originalSizes = {}
+local originalSizes = setmetatable({}, {__mode = "k"})
 
 local antiAfkEnabled = false
 local antiAfkConnection = nil
@@ -284,7 +407,9 @@ local HttpService = cloneref(game:GetService("HttpService"))
 local function SaveConfig()
     local config = {
         espEnabled = espEnabled,
-        espMode = espMode,
+        espHighlightEnabled = espHighlightEnabled,
+        espBoxEnabled = espBoxEnabled,
+        espTracerEnabled = espTracerEnabled,
         boxColorIndex = boxColorIndex,
         aimEnabled = aimEnabled,
         aimPart = aimPart,
@@ -321,7 +446,9 @@ local function LoadConfig()
             local decoded = HttpService:JSONDecode(readfile(configFileName))
             if decoded then
                 if decoded.espEnabled ~= nil then espEnabled = decoded.espEnabled end
-                if decoded.espMode ~= nil then espMode = decoded.espMode end
+                if decoded.espHighlightEnabled ~= nil then espHighlightEnabled = decoded.espHighlightEnabled end
+                if decoded.espBoxEnabled ~= nil then espBoxEnabled = decoded.espBoxEnabled end
+                if decoded.espTracerEnabled ~= nil then espTracerEnabled = decoded.espTracerEnabled end
                 if decoded.boxColorIndex ~= nil then boxColorIndex = decoded.boxColorIndex end
                 if decoded.aimEnabled ~= nil then aimEnabled = decoded.aimEnabled end
                 if decoded.aimPart ~= nil then aimPart = decoded.aimPart end
@@ -463,38 +590,257 @@ local function updatePredDot(pos)
     end
 end
 
+-- Keywords for foliage / non-solid map props that should NOT block wallcheck LOS.
+-- Many maps name these generically (MeshPart) so we also check ancestors + materials.
+local PENETRABLE_KEYWORDS = {
+    -- Foliage / plants (semak, daun, dll)
+    "bush", "leaf", "leaves", "foliage", "plant", "plants", "hedge", "shrub",
+    "grass", "weed", "weeds", "flower", "fern", "vine", "ivy", "moss", "reed",
+    "branch", "branches", "palm", "pine", "bamboo", "cactus",
+    "vegetation", "flora", "canopy", "underbrush", "thicket", "shrubbery",
+    "garden", "treeleaf", "treetop", "treetops", "crown",
+    -- Tree models often named Tree_01; trunk stays solid if named Trunk alone without these
+    "tree", "trees",
+    -- Spawn / non-solid volumes
+    "spawn", "spawns", "respawn", "lobby", "safezone", "safe_zone", "safearea",
+    "trigger", "sensor", "checkpoint", "killbrick", "invisible", "nocollide", "nocol",
+    -- Light decor / see-through
+    "sign", "signs", "billboard", "banner", "flag", "cloth", "curtain",
+    "water", "pond", "lake", "river", "waterfall", "puddle",
+    "glass", "window", "chainlink", "smoke", "fog", "cloud", "mist",
+    "particle", "effect", "fx", "beam", "decal", "scenery", "clutter",
+}
+
+local function nameLooksPenetrable(str)
+    if not str or str == "" then return false end
+    local lower = string.lower(str)
+    for i = 1, #PENETRABLE_KEYWORDS do
+        if string.find(lower, PENETRABLE_KEYWORDS[i], 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+local function isPenetratablePart(part, hitMaterial)
+    if not part then return true end
+
+    -- Terrain always blocks LOS (water already skipped via IgnoreWater)
+    if part:IsA("Terrain") then
+        return false
+    end
+
+    if not part:IsA("BasePart") then
+        return true
+    end
+
+    local ok, result = pcall(function()
+        -- Walk-through parts: always ignore for LOS (even if ray still hits them)
+        if part.CanCollide == false then
+            return true
+        end
+
+        -- CanQuery false should not be hit, but some executors/engines differ
+        if part.CanQuery == false then
+            return true
+        end
+
+        -- If the local player physically does not collide with this part (collision groups),
+        -- it is not solid cover — e.g. foliage/spawn volumes you can walk through.
+        local myChar = LocalPlayer.Character
+        local myRoot = myChar and (myChar:FindFirstChild("HumanoidRootPart") or myChar:FindFirstChild("Torso") or myChar:FindFirstChild("UpperTorso"))
+        if myRoot then
+            local collidable = true
+            local cgOk = pcall(function()
+                local PhysicsService = game:GetService("PhysicsService")
+                collidable = PhysicsService:CollisionGroupsAreCollidable(myRoot.CollisionGroup, part.CollisionGroup)
+            end)
+            if cgOk and collidable == false then
+                return true
+            end
+        end
+
+        -- Semi / fully transparent props (bushes, glass planes, spawn volumes)
+        if (part.Transparency or 0) >= 0.45 then
+            return true
+        end
+
+        -- Materials that are visually non-solid or see-through
+        local mat = part.Material
+        local softMats = {
+            [Enum.Material.Leaves] = true,
+            [Enum.Material.Grass] = true,
+            [Enum.Material.Fabric] = true,
+            [Enum.Material.ForceField] = true,
+            [Enum.Material.Glass] = true,
+            [Enum.Material.Foil] = true,
+        }
+        -- LeafyGrass may not exist on older clients
+        pcall(function()
+            softMats[Enum.Material.LeafyGrass] = true
+        end)
+        if softMats[mat] then
+            return true
+        end
+
+        -- Collision groups used so players pass through foliage while CanCollide stays true
+        local cg = part.CollisionGroup
+        if type(cg) == "string" and cg ~= "" and cg ~= "Default" then
+            local cgLower = string.lower(cg)
+            if string.find(cgLower, "foliage", 1, true)
+                or string.find(cgLower, "decor", 1, true)
+                or string.find(cgLower, "debris", 1, true)
+                or string.find(cgLower, "nocollide", 1, true)
+                or string.find(cgLower, "nocol", 1, true)
+                or string.find(cgLower, "passthrough", 1, true)
+                or string.find(cgLower, "transparent", 1, true)
+                or string.find(cgLower, "ghost", 1, true)
+                or string.find(cgLower, "prop", 1, true)
+                or string.find(cgLower, "plant", 1, true)
+                or string.find(cgLower, "bush", 1, true)
+                or string.find(cgLower, "tree", 1, true)
+                or string.find(cgLower, "spawn", 1, true)
+                or string.find(cgLower, "effect", 1, true) then
+                return true
+            end
+        end
+
+        -- Name on part
+        if nameLooksPenetrable(part.Name) then
+            return true
+        end
+
+        -- Ancestors: folders/models like "Bushes", "Foliage", "MapDecor", "Spawns"
+        local parent = part.Parent
+        local depth = 0
+        while parent and parent ~= workspace and depth < 8 do
+            if nameLooksPenetrable(parent.Name) then
+                return true
+            end
+            parent = parent.Parent
+            depth = depth + 1
+        end
+
+        -- Thin billboard-style foliage planes (large + very thin) — not thick walls
+        local size = part.Size
+        local sx, sy, sz = size.X, size.Y, size.Z
+        local minDim = math.min(sx, sy, sz)
+        local maxDim = math.max(sx, sy, sz)
+        local midDim = sx + sy + sz - minDim - maxDim
+        if minDim <= 0.35 and midDim >= 1.0 and maxDim >= 1.5 then
+            return true
+        end
+
+        -- Massless + any transparency: common for walk-through spawn volumes / effects
+        if part.Massless and (part.Transparency or 0) > 0 then
+            return true
+        end
+
+        return false
+    end)
+
+    if ok then
+        return result == true
+    end
+    -- If inspection failed, treat as solid (safer than shooting through real walls)
+    return false
+end
+
+local function getPenetrableIgnoreTarget(part)
+    if not part then return part end
+
+    -- Prefer nearest named foliage folder/model only (never wipe whole map containers)
+    local inst = part.Parent
+    local depth = 0
+    while inst and inst ~= workspace and depth < 6 do
+        if nameLooksPenetrable(inst.Name) then
+            local isPlayer = false
+            pcall(function()
+                if inst:IsA("Model") then
+                    isPlayer = Players:GetPlayerFromCharacter(inst) ~= nil
+                end
+            end)
+            if not isPlayer then
+                return inst
+            end
+        end
+        inst = inst.Parent
+        depth = depth + 1
+    end
+
+    -- Generic multi-mesh bush: only collapse immediate Model if it is small and not a character
+    local model = part.Parent
+    if model and model:IsA("Model") and model ~= workspace then
+        local isPlayer = false
+        pcall(function()
+            isPlayer = Players:GetPlayerFromCharacter(model) ~= nil
+        end)
+        if not isPlayer and not model:FindFirstChildOfClass("Humanoid") then
+            local parts = 0
+            local onlyFoliageLike = true
+            pcall(function()
+                for _, d in ipairs(model:GetChildren()) do
+                    if d:IsA("BasePart") then
+                        parts = parts + 1
+                        -- If siblings look like solid structure, don't ignore whole model
+                        if d.CanCollide and d.Transparency < 0.45 and d.Material ~= Enum.Material.Leaves
+                            and d.Material ~= Enum.Material.Grass and d.Material ~= Enum.Material.Glass
+                            and d.Material ~= Enum.Material.Fabric and not nameLooksPenetrable(d.Name) then
+                            local sz = d.Size
+                            local minD = math.min(sz.X, sz.Y, sz.Z)
+                            if minD > 0.5 then
+                                onlyFoliageLike = false
+                            end
+                        end
+                        if parts > 25 then break end
+                    end
+                end
+            end)
+            if onlyFoliageLike and parts >= 2 and parts <= 25 then
+                return model
+            end
+        end
+    end
+
+    return part
+end
+
 local function smartRaycast(origin, direction, ignoreListArray)
     local ignoreList = {}
-    if ignoreListArray then for _, v in pairs(ignoreListArray) do table.insert(ignoreList, v) end end
-    local maxCasts = 15
-    
-    for i = 1, maxCasts do
+    if ignoreListArray then
+        for _, v in pairs(ignoreListArray) do
+            table.insert(ignoreList, v)
+        end
+    end
+    -- Dense foliage maps need more multi-hit iterations
+    local maxCasts = 40
+
+    for _ = 1, maxCasts do
         local rayParams = RaycastParams.new()
         rayParams.FilterType = Enum.RaycastFilterType.Exclude
         rayParams.FilterDescendantsInstances = ignoreList
         rayParams.IgnoreWater = true
-        
+
         local hit = workspace:Raycast(origin, direction, rayParams)
-        if not hit then return nil end
-        
+        if not hit then
+            return nil
+        end
+
         local part = hit.Instance
-        local isPenetratable = false
-        pcall(function()
-            local name = (part.Name or ""):lower()
-            if part.Transparency >= 0.9 or not part.CanCollide then isPenetratable = true end
-            local mat = part.Material
-            if mat == Enum.Material.Leaves or mat == Enum.Material.Fabric or mat == Enum.Material.ForceField then isPenetratable = true end
-            if name:match("bush") or name:match("leaf") or name:match("tree") or name:match("spawn") or name:match("sign") or name:match("grass") or name:match("water") then
-                isPenetratable = true
+        local penetrable = isPenetratablePart(part, hit.Material)
+
+        if penetrable then
+            local ignoreTarget = getPenetrableIgnoreTarget(part)
+            table.insert(ignoreList, ignoreTarget)
+            -- Also always exclude the exact hit instance (in case ignoreTarget is a distant ancestor miss)
+            if ignoreTarget ~= part then
+                table.insert(ignoreList, part)
             end
-        end)
-        
-        if isPenetratable then
-            table.insert(ignoreList, part)
         else
             return hit
         end
     end
+    -- Exhausted casts through non-solid clutter: treat as clear LOS
     return nil
 end
 
@@ -570,6 +916,12 @@ local function removeAllBoxes()
     end
     boxLines = {}
 end
+local function removeAllTracers()
+    for plr, line in pairs(tracerLines) do
+        line:Remove()
+    end
+    tracerLines = {}
+end
 local function createHighlightForPlayer(plr)
     if plr == LocalPlayer then return end
     if not plr.Character then return end
@@ -589,50 +941,89 @@ local function createHighlightForPlayer(plr)
 end
 local function createBoxLinesForPlayer(plr)
     if boxLines[plr] then return end
-    local lines = {}
-    for i=1,4 do
-        lines[i] = Drawing.new("Line")
-        lines[i].Thickness = 2
-        lines[i].Color = boxColor
-        lines[i].Visible = false
+    if type(Drawing) == "table" and type(Drawing.new) == "function" then
+        local lines = {}
+        for i = 1, 4 do
+            local success, line = pcall(Drawing.new, "Line")
+            if success and line then
+                line.Thickness = 2
+                line.Color = boxColor
+                line.Visible = false
+                table.insert(lines, line)
+            end
+        end
+        if #lines == 4 then
+            boxLines[plr] = lines
+        end
     end
-    boxLines[plr] = lines
 end
-local function updateBoxes()
-    if not espEnabled or espMode ~= "Box" then
+local function createTracerLineForPlayer(plr)
+    if tracerLines[plr] then return end
+    if type(Drawing) == "table" and type(Drawing.new) == "function" then
+        local success, line = pcall(Drawing.new, "Line")
+        if success and line then
+            line.Thickness = 1.5
+            line.Color = boxColor
+            line.Visible = false
+            tracerLines[plr] = line
+        end
+    end
+end
+
+-- ESP
+local function updateESP()
+    if not espEnabled then
         for _, lines in pairs(boxLines) do
             for _, line in pairs(lines) do line.Visible = false end
+        end
+        for _, line in pairs(tracerLines) do
+            line.Visible = false
         end
         return
     end
     for _, plr in pairs(Players:GetPlayers()) do
         local isEnemy = plr ~= LocalPlayer and (not LocalPlayer.Team or plr.Team ~= LocalPlayer.Team)
         if isEnemy and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Head") then
-            createBoxLinesForPlayer(plr)
             local root = plr.Character.HumanoidRootPart
             local head = plr.Character.Head
             local rPos, rVis = Camera:WorldToViewportPoint(root.Position)
             local hPos, hVis = Camera:WorldToViewportPoint(head.Position)
-            if rVis and hVis then
-                local height = math.abs(hPos.Y - rPos.Y) * 2.2
-                local width = height * 0.7
-                local cx = rPos.X
-                local cy = (hPos.Y + rPos.Y)/2
-                local left = cx - width/2
-                local right = cx + width/2
-                local top = cy - height/2
-                local bottom = cy + height/2
+            if espBoxEnabled and rVis and hVis then
+                createBoxLinesForPlayer(plr)
                 local lines = boxLines[plr]
-                lines[1].From = Vector2.new(left, top); lines[1].To = Vector2.new(right, top)
-                lines[2].From = Vector2.new(right, top); lines[2].To = Vector2.new(right, bottom)
-                lines[3].From = Vector2.new(right, bottom); lines[3].To = Vector2.new(left, bottom)
-                lines[4].From = Vector2.new(left, bottom); lines[4].To = Vector2.new(left, top)
-                for _, line in pairs(lines) do line.Color = boxColor; line.Visible = true end
+                if lines then
+                    local height = math.abs(hPos.Y - rPos.Y) * 2.2
+                    local width = height * 0.7
+                    local cx = rPos.X
+                    local cy = (hPos.Y + rPos.Y)/2
+                    local left = cx - width/2
+                    local right = cx + width/2
+                    local top = cy - height/2
+                    local bottom = cy + height/2
+                    lines[1].From = Vector2.new(left, top); lines[1].To = Vector2.new(right, top)
+                    lines[2].From = Vector2.new(right, top); lines[2].To = Vector2.new(right, bottom)
+                    lines[3].From = Vector2.new(right, bottom); lines[3].To = Vector2.new(left, bottom)
+                    lines[4].From = Vector2.new(left, bottom); lines[4].To = Vector2.new(left, top)
+                    for _, line in pairs(lines) do line.Color = boxColor; line.Visible = true end
+                end
             else
                 if boxLines[plr] then for _, line in pairs(boxLines[plr]) do line.Visible = false end end
             end
+            if espTracerEnabled and rVis then
+                createTracerLineForPlayer(plr)
+                local line = tracerLines[plr]
+                if line then
+                    line.From = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y)
+                    line.To = Vector2.new(rPos.X, rPos.Y)
+                    line.Color = boxColor
+                    line.Visible = true
+                end
+            else
+                if tracerLines[plr] then tracerLines[plr].Visible = false end
+            end
         else
             if boxLines[plr] then for _, line in pairs(boxLines[plr]) do line.Visible = false end end
+            if tracerLines[plr] then tracerLines[plr].Visible = false end
         end
     end
 end
@@ -640,22 +1031,28 @@ local function refreshESP()
     if not espEnabled then
         removeAllHighlights()
         removeAllBoxes()
+        removeAllTracers()
         return
     end
-    if espMode == "Highlight" then
-        removeAllBoxes()
+    if espHighlightEnabled then
         for _, plr in pairs(Players:GetPlayers()) do
             createHighlightForPlayer(plr)
         end
     else
         removeAllHighlights()
     end
+    if not espBoxEnabled then
+        removeAllBoxes()
+    end
+    if not espTracerEnabled then
+        removeAllTracers()
+    end
 end
 
 Players.PlayerAdded:Connect(function(plr)
     plr.CharacterAdded:Connect(function()
         task.wait(0.5)
-        if espEnabled and espMode == "Highlight" then
+        if espEnabled and espHighlightEnabled then
             createHighlightForPlayer(plr)
         end
     end)
@@ -665,20 +1062,22 @@ Players.PlayerRemoving:Connect(function(plr)
         for _, line in pairs(boxLines[plr]) do line:Remove() end
         boxLines[plr] = nil
     end
+    if tracerLines[plr] then
+        tracerLines[plr]:Remove()
+        tracerLines[plr] = nil
+    end
 end)
 for _, plr in pairs(Players:GetPlayers()) do
-    if plr.Character then
-        plr.CharacterAdded:Connect(function()
-            task.wait(0.5)
-            if espEnabled and espMode == "Highlight" then
-                createHighlightForPlayer(plr)
-            end
-        end)
-    end
+    plr.CharacterAdded:Connect(function()
+        task.wait(0.5)
+        if espEnabled and espHighlightEnabled then
+            createHighlightForPlayer(plr)
+        end
+    end)
 end
 LocalPlayer.CharacterAdded:Connect(function()
     task.wait(1)
-    if espEnabled and espMode == "Highlight" then
+    if espEnabled and espHighlightEnabled then
         for _, plr in pairs(Players:GetPlayers()) do
             createHighlightForPlayer(plr)
         end
@@ -701,15 +1100,18 @@ local function getClosestEnemy()
             local humanoid = plr.Character:FindFirstChildOfClass("Humanoid")
             if humanoid and humanoid.Health > 0 and (not LocalPlayer.Team or plr.Team ~= LocalPlayer.Team) then
                 local char = plr.Character
-                local targetPos = getBestTargetPos(char)
-                if targetPos then
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
+                local part = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+                if part then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
                     if onScreen then
                         local dist = (center - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
                         if dist < closestDist then
-                            closestDist = dist
-                            closest = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-                            bestPos = targetPos
+                            local targetPos = getBestTargetPos(char)
+                            if targetPos then
+                                closestDist = dist
+                                closest = part
+                                bestPos = targetPos
+                            end
                         end
                     end
                 end
@@ -737,17 +1139,20 @@ local function getClosestSilentEnemy()
             local humanoid = plr.Character:FindFirstChildOfClass("Humanoid")
             if humanoid and humanoid.Health > 0 and (not LocalPlayer.Team or plr.Team ~= LocalPlayer.Team) then
                 local char = plr.Character
-                local targetPos = getBestTargetPos(char)
-                if targetPos then
-                    local physicalDist = myPos and (targetPos - myPos).Magnitude or 0
+                local part = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+                if part then
+                    local physicalDist = myPos and (part.Position - myPos).Magnitude or 0
                     if physicalDist <= silentAimDistance then
-                        local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
+                        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
                         if onScreen then
                             local dist = (center - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
                             if dist < closestDist then
-                                closestDist = dist
-                                closest = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-                                bestPos = targetPos
+                                local targetPos = getBestTargetPos(char)
+                                if targetPos then
+                                    closestDist = dist
+                                    closest = part
+                                    bestPos = targetPos
+                                end
                             end
                         end
                     end
@@ -834,7 +1239,7 @@ RunService.RenderStepped:Connect(function()
         fovFrame.Position = UDim2.new(0, pos.X, 0, pos.Y)
     end
 
-    updateBoxes()
+    updateESP()
     if not aimEnabled and not triggerbotEnabled then 
         updatePredDot(nil)
         return 
@@ -892,7 +1297,9 @@ RunService.RenderStepped:Connect(function()
     end
 
     local keyPressed = false
-    if aimKey.EnumType == Enum.UserInputType then
+    if isMobile then
+        keyPressed = mobileAimHolding
+    elseif aimKey.EnumType == Enum.UserInputType then
         keyPressed = UserInputService:IsMouseButtonPressed(aimKey)
     else
         keyPressed = UserInputService:IsKeyDown(aimKey)
@@ -985,22 +1392,120 @@ end
 
 local UI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Hplayfree25/luaLibrary/refs/heads/master/Init.lua?t=" .. tick()))()
 
+-- ponytail: window sized to viewport; mobile uses scale so it fits small screens,
+-- PC keeps fixed offsets. Upgrade: clamp to a min absolute size if very large tablets appear.
+local winSize = UDim2.new(0, 500, 0, 320)
+if isMobile then
+    local vp = Camera.ViewportSize
+    local w = math.min(vp.X - 24, 460)
+    local h = math.min(vp.Y - 80, 520)
+    winSize = UDim2.new(0, w, 0, h)
+end
+
 local Window = UI.CreateWindow({
     Title = "NMZ Hub",
     ToggleText = "NMZ",
-    Size = UDim2.new(0, 500, 0, 320),
+    Size = winSize,
     Keybind = Enum.KeyCode.LeftAlt,
     HideOnStartup = true
 })
 
 task.spawn(function()
     task.wait(1)
-    UI.Notify({
-        Title = "UI Loaded",
-        Content = "Press 'Left Alt' on your keyboard to open or close the menu.",
-        Duration = 7
-    })
+    if isMobile then
+        UI.Notify({
+            Title = "UI Loaded",
+            Content = "Tap the 'NMZ' button to open the menu. Hold the floating AIM button to aim.",
+            Duration = 7
+        })
+    else
+        UI.Notify({
+            Title = "UI Loaded",
+            Content = "Press 'Left Alt' on your keyboard to open or close the menu.",
+            Duration = 7
+        })
+    end
 end)
+
+-- Mobile floating AIM button (hold-to-aim, draggable). PC skips this; right-click still works.
+if isMobile then
+    mobileAimGui = Instance.new("ScreenGui")
+    mobileAimGui.Name = "NMZ_MobileAim"
+    mobileAimGui.ResetOnSpawn = false
+    mobileAimGui.IgnoreGuiInset = true
+    mobileAimGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    pcall(function() if gethui then mobileAimGui.Parent = gethui() else mobileAimGui.Parent = game:GetService("CoreGui") end end)
+    if mobileAimGui.Parent == nil then
+        mobileAimGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+    end
+
+    mobileAimBtn = Instance.new("TextButton")
+    mobileAimBtn.Size = UDim2.new(0, 64, 0, 64)
+    mobileAimBtn.Position = UDim2.new(0, 24, 0.5, -32)
+    mobileAimBtn.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+    mobileAimBtn.BackgroundTransparency = 0.15
+    mobileAimBtn.Text = "AIM"
+    mobileAimBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    mobileAimBtn.Font = Enum.Font.GothamBold
+    mobileAimBtn.TextSize = 16
+    mobileAimBtn.AutoButtonColor = false
+    mobileAimBtn.Active = true
+    mobileAimBtn.Parent = mobileAimGui
+
+    local aimCorner = Instance.new("UICorner")
+    aimCorner.CornerRadius = UDim.new(1, 0)
+    aimCorner.Parent = mobileAimBtn
+
+    local aimStroke = Instance.new("UIStroke")
+    aimStroke.Color = Color3.fromRGB(70, 130, 200)
+    aimStroke.Thickness = 2
+    aimStroke.Transparency = 0.2
+    aimStroke.Parent = mobileAimBtn
+
+    -- Hold-to-aim (finger down = aim on, up = off) + draggable to reposition.
+    -- Aim stays active even while dragging — dragging just moves the button.
+    local dragging = false
+    local dragStart = nil
+    local startPos = nil
+
+    local function pressAim()
+        mobileAimHolding = true
+        TweenService:Create(mobileAimBtn, TweenInfo.new(0.15, Enum.EasingStyle.Sine), {
+            BackgroundColor3 = Color3.fromRGB(70, 130, 200),
+            TextColor3 = Color3.fromRGB(0, 0, 0)
+        }):Play()
+    end
+    local function releaseAim()
+        mobileAimHolding = false
+        TweenService:Create(mobileAimBtn, TweenInfo.new(0.15, Enum.EasingStyle.Sine), {
+            BackgroundColor3 = Color3.fromRGB(20, 20, 24),
+            TextColor3 = Color3.fromRGB(255, 255, 255)
+        }):Play()
+    end
+
+    mobileAimBtn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = true
+            dragStart = input.Position
+            startPos = mobileAimBtn.Position
+            pressAim()
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+            local delta = input.Position - dragStart
+            mobileAimBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1) then
+            dragging = false
+            releaseAim()
+        end
+    end)
+end
 
 getGenv()[scriptId] = function()
     scriptUnloaded = true
@@ -1010,14 +1515,39 @@ getGenv()[scriptId] = function()
     if predDot then predDot:Remove() predDot = nil end
     if guiFov then pcall(function() guiFov:Destroy() end) guiFov = nil end
     if guiPredDot then pcall(function() guiPredDot:Destroy() end) guiPredDot = nil end
+    if mobileAimGui then pcall(function() mobileAimGui:Destroy() end) mobileAimGui = nil; mobileAimBtn = nil end
     removeAllHighlights()
     removeAllBoxes()
+    removeAllTracers()
     restoreAllHitboxes()
     if antiAfkConnection then antiAfkConnection:Disconnect(); antiAfkConnection = nil end
     if particleConnection then particleConnection:Disconnect(); particleConnection = nil end
     if fullBrightConnection then fullBrightConnection:Disconnect(); fullBrightConnection = nil end
+    stopSoftGunSupport()
     if recoilThread then coroutine.close(recoilThread); recoilThread = nil end
     if reloadConn then reloadConn:Disconnect(); reloadConn = nil end
+    if success and wm and type(wm) == "table" and getgenv().NMZ_Originals then
+        if getgenv().NMZ_Originals.Equip then rawset(wm, "Equip", getgenv().NMZ_Originals.Equip) end
+        if getgenv().NMZ_Originals.Cycle then rawset(wm, "Cycle", getgenv().NMZ_Originals.Cycle) end
+        if getgenv().NMZ_Originals.boltCycleAction then rawset(wm, "boltCycleAction", getgenv().NMZ_Originals.boltCycleAction) end
+        if getgenv().NMZ_Originals.Reload then rawset(wm, "Reload", getgenv().NMZ_Originals.Reload) end
+        if getgenv().NMZ_Originals.Shoot then rawset(wm, "Shoot", getgenv().NMZ_Originals.Shoot) end
+        local inner = getgenv().NMZ_Originals.InnerShoot
+        if inner and inner.Func then
+            if inner.Method == "upvalue" and inner.Owner and inner.Key and debug.setupvalue then
+                pcall(debug.setupvalue, inner.Owner, inner.Key, inner.Func)
+            elseif inner.Method == "env" and inner.Env and inner.Key then
+                pcall(rawset, inner.Env, inner.Key, inner.Func)
+            elseif isExecutorSupported and hookfunction then
+                -- hookfn path: restore by re-hooking original body if we still have a live ref
+                pcall(function()
+                    if inner.Live then
+                        hookfunction(inner.Live, inner.Func)
+                    end
+                end)
+            end
+        end
+    end
     getGenv()[scriptId] = nil
 end
 
@@ -1033,8 +1563,16 @@ UI.CreateToggle(TabESP, "ESP Toggle", espEnabled, function(Value)
     espEnabled = Value
     refreshESP()
 end)
-UI.CreateDropdown(TabESP, "ESP Mode", {{name="Highlight",val="Highlight"},{name="Box",val="Box"}}, 1, function(Option)
-    espMode = Option
+UI.CreateToggle(TabESP, "ESP Highlight", espHighlightEnabled, function(Value)
+    espHighlightEnabled = Value
+    refreshESP()
+end)
+UI.CreateToggle(TabESP, "ESP Box", espBoxEnabled, function(Value)
+    espBoxEnabled = Value
+    refreshESP()
+end)
+UI.CreateToggle(TabESP, "ESP Tracer", espTracerEnabled, function(Value)
+    espTracerEnabled = Value
     refreshESP()
 end)
 
@@ -1046,6 +1584,7 @@ UI.CreateDropdown(TabESP, "ESP Color", colOpts, 1, function(Option)
             boxColorIndex = i
             boxColor = boxColors[i]
             for plr, lines in pairs(boxLines) do for _, l in pairs(lines) do l.Color = boxColor end end
+            for plr, l in pairs(tracerLines) do l.Color = boxColor end
             break
         end
     end
@@ -1075,6 +1614,13 @@ end)
 UI.CreateLabel(TabSilent, "⚠️ Note: Silent Aim & Wall Check may be unstable on Solara and Xeno")
 UI.CreateToggle(TabSilent, "Silent Aim Toggle", silentAimEnabled, function(Value)
     silentAimEnabled = Value
+    if Value and not silentHookInstalled then
+        UI.Notify({
+            Title = "Silent Aim Inactive",
+            Content = "Hook not installed. Check F9 for [NMZ] logs or re-execute after spawning with a gun.",
+            Duration = 4
+        })
+    end
 end)
 UI.CreateSlider(TabSilent, "Silent Max Distance", 100, 3000, silentAimDistance, function(v) return tostring(math.floor(v)) end, function(Value)
     silentAimDistance = Value
@@ -1092,12 +1638,16 @@ UI.CreateToggle(TabSilent, "Wall Check", wallCheckEnabled, function(Value)
     wallCheckEnabled = Value
 end)
 
-UI.CreateLabel(TabGun, "⚠️ Note: Fast Bolt & No Recoil may be unstable on Solara and Xeno")
+UI.CreateLabel(TabGun, "V1.5 module path (full) + soft equip support (Solara). Fast Bolt may be limited.")
 UI.CreateToggle(TabGun, "No Recoil", noRecoilEnabled, function(Value)
     noRecoilEnabled = Value
+    local t = getHeldTool()
+    if t and Value then applyV15GunAttrs(t) end
 end)
 UI.CreateToggle(TabGun, "No Spread", noSpreadEnabled, function(Value)
     noSpreadEnabled = Value
+    local t = getHeldTool()
+    if t and Value then applyV15GunAttrs(t) end
 end)
 UI.CreateToggle(TabGun, "Fast Bolt", fastBoltEnabled, function(Value)
     fastBoltEnabled = Value
@@ -1212,128 +1762,288 @@ end)
 UI.CreateButton(TabMisc, "Unload Script", function()
     if getGenv()[scriptId] then getGenv()[scriptId]() end
 end)
-UI.CreateLabel(TabMisc, "Script Version: V1.5")
+UI.CreateLabel(TabMisc, "Script Version: V1.5.1")
 
 refreshESP()
 
-if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
-    pcall(function()
-        local anon = debug.getupvalue(rawget(wm, "Shoot"), 3)
-        if not anon or typeof(anon) ~= "function" then
-            for _, v in pairs(debug.getupvalues(rawget(wm, "Shoot"))) do
-                if type(v) == "function" then
-                    anon = v
-                    break
+-- Luau often has empty getfenv — find aim-calc via upvalues / getgc, hook with hookfunction.
+local function getFnName(fn)
+    local n = ""
+    pcall(function() n = debug.info(fn, "n") or "" end)
+    return n
+end
+
+local function iterUpvalues(fn)
+    local list = {}
+    if type(fn) ~= "function" then return list end
+    -- indexed API
+    for i = 1, 64 do
+        local ok, name, val = pcall(debug.getupvalue, fn, i)
+        if not ok or name == nil then break end
+        table.insert(list, { index = i, name = name, value = val, owner = fn })
+    end
+    -- table API fallback (some executors)
+    if #list == 0 then
+        pcall(function()
+            local ups = debug.getupvalues(fn)
+            if type(ups) == "table" then
+                for k, v in pairs(ups) do
+                    local idx = type(k) == "number" and k or #list + 1
+                    table.insert(list, { index = idx, name = tostring(k), value = v, owner = fn })
                 end
             end
-        end
-        if anon then
-            for k, v in pairs(getfenv(anon)) do
-                if type(v) == "function" then
-                    local n = debug.info(v, "n")
-                    if n == "Crosshair" or n == "bulletMagnetism" then
-                        local oldShootFn = rawget(getfenv(anon), k)
-                        local newShootFn = newcclosure(function(...)
-                            if noSpreadEnabled then
-                                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                                if hrp then
-                                    local oldALV = hrp.AssemblyLinearVelocity
-                                    hrp.AssemblyLinearVelocity = Vector3.zero
-                                    task.defer(function()
-                                        if hrp then hrp.AssemblyLinearVelocity = oldALV end
-                                    end)
-                                end
-                            end
+        end)
+    end
+    return list
+end
 
-                            if silentAimEnabled then
-                                local ok, res = pcall(function()
-                                    local c, bestPos = getClosestSilentEnemy()
-                                    if c and currentVelocity and currentTool and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") then
-                                        local pos = bestPos or c.Position
-                                        local tVel = c.AssemblyLinearVelocity or c.Velocity or Vector3.new()
-                                        
-                                        local r = pos - LocalPlayer.Character.Head.Position
-                                        local vVec = tVel - (LocalPlayer.Character.Head.AssemblyLinearVelocity or LocalPlayer.Character.Head.Velocity or Vector3.new())
-                                        
-                                        local a = vVec:Dot(vVec) - (currentVelocity * currentVelocity)
-                                        local b = 2 * r:Dot(vVec)
-                                        local c0 = r:Dot(r)
-                                        
-                                        local disc = b * b - 4 * a * c0
-                                        if disc >= 0 then
-                                            local sqrtDisc = math.sqrt(disc)
-                                            local t1 = (-b - sqrtDisc) / (2 * a)
-                                            local t2 = (-b + sqrtDisc) / (2 * a)
-                                            
-                                            local tVal
-                                            if t1 > 0 and t2 > 0 then
-                                                tVal = math.min(t1, t2)
-                                            elseif t1 > 0 then
-                                                tVal = t1
-                                            elseif t2 > 0 then
-                                                tVal = t2
-                                            end
-                                            
-                                            if tVal then
-                                                local prediction = pos + tVel * tVal
-                                                local drop = 0.5 * workspace.Gravity * (tVal * tVal)
-                                                prediction = prediction + Vector3.new(0, drop, 0)
-                                                return prediction
-                                            end
-                                        end
-                                        return pos
-                                    end
-                                end)
-                                if ok and res then return res end
-                            end
-                            
-                            if noSpreadEnabled then
-                                local ok, res = pcall(function()
-                                    local mouse = LocalPlayer:GetMouse()
-                                    local rayParams = RaycastParams.new()
-                                    rayParams.FilterType = Enum.RaycastFilterType.Exclude
-                                    if LocalPlayer.Character then
-                                        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, workspace.CurrentCamera}
-                                    else
-                                        rayParams.FilterDescendantsInstances = {workspace.CurrentCamera}
-                                    end
-                                    
-                                    local cam = workspace.CurrentCamera
-                                    local ray = cam:ScreenPointToRay(mouse.X, mouse.Y)
-                                    local hit = workspace:Raycast(ray.Origin, ray.Direction * 3000, rayParams)
-                                    
-                                    if hit then
-                                        return hit.Position
-                                    else
-                                        return ray.Origin + ray.Direction * 3000
-                                    end
-                                end)
-                                if ok and res then return res end
-                            end
-                            
-                            return oldShootFn(...)
-                        end)
-                        if isExecutorSupported then
-                            oldShootFn = clonefunction(hookfunction(rawget(getfenv(anon), k), newShootFn))
-                        else
-                            rawset(getfenv(anon), k, newShootFn)
-                        end
+local aimNameSet = {
+    Crosshair = true, crosshair = true,
+    bulletMagnetism = true, BulletMagnetism = true, magnetism = true,
+    GetAim = true, getAim = true, AimPos = true, GetHitPosition = true,
+    hitPosition = true, GetTarget = true, GetBulletTarget = true,
+    bulletTarget = true, CalculateHit = true, getHit = true
+}
+
+local function isAimName(n)
+    if not n or n == "" then return false end
+    if aimNameSet[n] then return true end
+    local low = string.lower(n)
+    return low:find("crosshair", 1, true)
+        or low:find("magnet", 1, true)
+        or low:find("aimpos", 1, true)
+        or low:find("hittarget", 1, true)
+        or low:find("bullettarget", 1, true)
+end
+
+-- Returns: method ("upvalue"|"hookfn"|"env"), owner, indexOrKey, func, label
+local function findAimCalc()
+    local shootFn = rawget(wm, "Shoot")
+    if type(shootFn) ~= "function" then return nil end
+
+    local dump = {}
+    local function dumpFn(tag, fn)
+        local n = getFnName(fn)
+        local line = tag .. " name=" .. (n ~= "" and n or "?")
+        pcall(function()
+            local info = debug.getinfo(fn)
+            if type(info) == "table" then
+                line = line .. " nups=" .. tostring(info.nups or "?")
+                if info.short_src then line = line .. " src=" .. tostring(info.short_src) end
+            end
+        end)
+        table.insert(dump, line)
+    end
+
+    dumpFn("Shoot", shootFn)
+    local shootUps = iterUpvalues(shootFn)
+    for _, u in ipairs(shootUps) do
+        if type(u.value) == "function" then
+            dumpFn("  uv#" .. u.index .. "(" .. tostring(u.name) .. ")", u.value)
+            if isAimName(u.name) or isAimName(getFnName(u.value)) then
+                return "upvalue", u.owner, u.index, u.value, getFnName(u.value) ~= "" and getFnName(u.value) or u.name, dump
+            end
+            -- nested upvalues one level deep (anon shoot helper)
+            for _, nu in ipairs(iterUpvalues(u.value)) do
+                if type(nu.value) == "function" then
+                    dumpFn("    uv#" .. nu.index .. "(" .. tostring(nu.name) .. ")", nu.value)
+                    if isAimName(nu.name) or isAimName(getFnName(nu.value)) then
+                        return "upvalue", nu.owner, nu.index, nu.value, getFnName(nu.value) ~= "" and getFnName(nu.value) or nu.name, dump
                     end
                 end
             end
         end
+    end
+
+    -- getfenv path (legacy / some executors still fill it)
+    local function scanEnv(fn)
+        local okEnv, env = pcall(getfenv, fn)
+        if not okEnv or type(env) ~= "table" then return nil end
+        for k, v in pairs(env) do
+            if type(v) == "function" and (isAimName(k) or isAimName(getFnName(v))) then
+                return env, k, v, getFnName(v) ~= "" and getFnName(v) or tostring(k)
+            end
+        end
+        return nil
+    end
+    do
+        local env, key, func, name = scanEnv(shootFn)
+        if env then return "env", env, key, func, name, dump end
+        for _, u in ipairs(shootUps) do
+            if type(u.value) == "function" then
+                local env, key, func, name = scanEnv(u.value)
+                if env then return "env", env, key, func, name, dump end
+            end
+        end
+    end
+
+    -- getgc: find named aim fn referenced by Shoot's closure tree
+    if getgc then
+        local okGc, gcList = pcall(getgc, true)
+        if okGc and type(gcList) == "table" then
+            for _, obj in ipairs(gcList) do
+                if type(obj) == "function" then
+                    local n = getFnName(obj)
+                    if isAimName(n) then
+                        dumpFn("getgc", obj)
+                        return "hookfn", nil, nil, obj, n, dump
+                    end
+                end
+            end
+        end
+    end
+
+    return nil, nil, nil, nil, nil, dump
+end
+
+if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
+    pcall(function()
+        local method, owner, idxOrKey, oldFn, foundName, dump = findAimCalc()
+
+        if dump then
+            print("[NMZ] WeaponModule.Shoot dump:")
+            for _, line in ipairs(dump) do print("  " .. line) end
+        end
+
+        if not oldFn then
+            warn("[NMZ] Silent Aim hook NOT installed — aim calc not found in WeaponModule")
+            if dump and #dump > 0 then
+                warn("[NMZ] See dump above — kirim ke dev kalau masih gagal")
+            end
+            return
+        end
+
+        if not getgenv().NMZ_Originals then getgenv().NMZ_Originals = {} end
+
+        -- Closure captures oldShootFn binding (assigned after hookfunction returns original).
+        local oldShootFn = oldFn
+        if getgenv().NMZ_Originals.InnerShoot and getgenv().NMZ_Originals.InnerShoot.Func then
+            oldShootFn = getgenv().NMZ_Originals.InnerShoot.Func
+        end
+
+        local newShootFn = newcclosure(function(...)
+            if noSpreadEnabled then
+                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local oldALV = hrp.AssemblyLinearVelocity
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    task.defer(function()
+                        if hrp then hrp.AssemblyLinearVelocity = oldALV end
+                    end)
+                end
+            end
+
+            if silentAimEnabled then
+                local ok, res = pcall(function()
+                    local tool, vel = resolveGunContext()
+                    local c, bestPos = getClosestSilentEnemy()
+                    local head = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head")
+                    if c and vel and head then
+                        local pos = bestPos or c.Position
+                        local tVel = c.AssemblyLinearVelocity or c.Velocity or Vector3.new()
+                        local r = pos - head.Position
+                        local vVec = tVel - (head.AssemblyLinearVelocity or head.Velocity or Vector3.new())
+                        local a = vVec:Dot(vVec) - (vel * vel)
+                        local b = 2 * r:Dot(vVec)
+                        local c0 = r:Dot(r)
+                        local disc = b * b - 4 * a * c0
+                        if disc >= 0 and math.abs(a) > 1e-6 then
+                            local sqrtDisc = math.sqrt(disc)
+                            local t1 = (-b - sqrtDisc) / (2 * a)
+                            local t2 = (-b + sqrtDisc) / (2 * a)
+                            local tVal
+                            if t1 > 0 and t2 > 0 then tVal = math.min(t1, t2)
+                            elseif t1 > 0 then tVal = t1
+                            elseif t2 > 0 then tVal = t2 end
+                            if tVal then
+                                return pos + tVel * tVal + Vector3.new(0, 0.5 * workspace.Gravity * tVal * tVal, 0)
+                            end
+                        end
+                        return pos
+                    end
+                end)
+                if ok and res then return res end
+            end
+
+            if noSpreadEnabled then
+                local ok, res = pcall(function()
+                    local mouse = LocalPlayer:GetMouse()
+                    local rayParams = RaycastParams.new()
+                    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                    if LocalPlayer.Character then
+                        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, workspace.CurrentCamera}
+                    else
+                        rayParams.FilterDescendantsInstances = {workspace.CurrentCamera}
+                    end
+                    local cam = workspace.CurrentCamera
+                    local ray = cam:ScreenPointToRay(mouse.X, mouse.Y)
+                    local hit = workspace:Raycast(ray.Origin, ray.Direction * 3000, rayParams)
+                    if hit then return hit.Position end
+                    return ray.Origin + ray.Direction * 3000
+                end)
+                if ok and res then return res end
+            end
+
+            return oldShootFn(...)
+        end)
+
+        local installed = false
+
+        -- 1) hookfunction on the function object (best on Potassium)
+        if isExecutorSupported and hookfunction then
+            local okHook, ret = pcall(hookfunction, oldFn, newShootFn)
+            if okHook and type(ret) == "function" then
+                oldShootFn = ret
+                installed = true
+                method = "hookfn"
+            end
+        end
+
+        -- 2) upvalue replace
+        if not installed and method == "upvalue" and owner and idxOrKey and debug.setupvalue then
+            local okUv = pcall(debug.setupvalue, owner, idxOrKey, newShootFn)
+            if okUv then installed = true end
+        end
+
+        -- 3) env replace (legacy)
+        if not installed and method == "env" and owner and idxOrKey then
+            local okEnv = pcall(rawset, owner, idxOrKey, newShootFn)
+            if okEnv then installed = true end
+        end
+
+        if not installed then
+            warn("[NMZ] Silent Aim found (" .. tostring(foundName) .. ") but failed to hook")
+            return
+        end
+
+        getgenv().NMZ_Originals.InnerShoot = {
+            Method = method,
+            Owner = owner,
+            Key = idxOrKey,
+            Func = oldShootFn,
+            Live = oldFn,
+            Env = method == "env" and owner or nil
+        }
+        silentHookInstalled = true
+        print("[NMZ] Silent Aim hooked via: " .. tostring(foundName) .. " (" .. tostring(method) .. ")")
     end)
 end
 
 print("MNZ ENTRENCHED WW1 - SCC UI LOADED")
 
-if not isExecutorSupported then
-    task.spawn(function()
-        task.wait(1.5)
+task.spawn(function()
+    task.wait(1.5)
+    if not isExecutorSupported then
         UI.Notify({
-            Title = "Executor Not Supported",
-            Content = "Unsupported Executor. Aimbot, Silent Aim, Fast Bolt, and No Recoil will NOT work.",
-            Duration = 5
+            Title = "Limited Executor",
+            Content = "No Recoil/No Spread use V1.5 attrs + soft equip. Silent Aim/Fast Bolt may fail. Prefer Camera aim.",
+            Duration = 6
         })
-    end)
-end
+    elseif not silentHookInstalled then
+        UI.Notify({
+            Title = "Silent Aim Hook Failed",
+            Content = "Aim calc not found. Open F9 and send the [NMZ] WeaponModule.Shoot dump lines.",
+            Duration = 7
+        })
+    end
+end)
