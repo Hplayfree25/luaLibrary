@@ -1,6 +1,12 @@
+local TARGET_PLACE_ID = 13687899540
+if game.PlaceId ~= TARGET_PLACE_ID then
+    error("[NMZ] Cold War only — PlaceId " .. tostring(TARGET_PLACE_ID) .. " required (got " .. tostring(game.PlaceId) .. ")", 0)
+end
+
 local cloneref = cloneref or function(i) return i end
-local newcclosure = function(f) return f end
+local newcclosure = newcclosure or function(f) return f end
 local hookfunction = (type(hookfunction) == "function" and hookfunction) or nil
+-- Full executor: hookmetamethod supported (coldwar_old AC style)
 local hookmetamethod = (type(hookmetamethod) == "function" and hookmetamethod) or nil
 local checkcaller = checkcaller or function() return false end
 local getnamecallmethod = getnamecallmethod or function() return "" end
@@ -53,8 +59,9 @@ local combat = {
     SpreadMult = 0,          
     SilentEnabled = false,
     SilentTarget = "Head",
-    SilentFov = 150,
-    SilentFovEnabled = false,
+    SilentFov = 120,
+    SilentFovEnabled = true,   -- FOV limit
+    SilentFovDraw = true,      -- show cyan silent FOV ring
     SilentExcludeTeammates = true,
     InstantReload = false,
     InstantADS = false,
@@ -69,7 +76,8 @@ local combat = {
     InfiniteMags = false,    
     FastRevive = false,      
     CarMods = false,         
-    QuickClimb = false,      
+    QuickClimb = false,
+    AcBypass = false,        -- OFF default — toggle to install AC bypass (sUNC-safe)
 }
 
 local status = {
@@ -87,6 +95,7 @@ local status = {
     revive = false,
     carMods = false,
     quickClimb = false,
+    ac = false,
 }
 
 -- ── ESP / aimbot state ─────────────────────────────────────────────────────
@@ -168,9 +177,19 @@ local function LoadConfig()
 end
 LoadConfig()
 
--- ── FOV / pred ─────────────────────────────────────────────────────────────
+-- ── FOV / markers ──────────────────────────────────────────────────────────
 local guiFov, fovFrame = nil, nil
+local guiSilentFov, silentFovFrame = nil, nil
 local guiPredDot, predDotFrame = nil, nil
+local silentFovColor = Color3.fromRGB(0, 220, 255) -- cyan silent ring (aimbot = red)
+
+local function guiParent()
+    local parent = LocalPlayer:WaitForChild("PlayerGui")
+    pcall(function()
+        if gethui then parent = gethui() else parent = game:GetService("CoreGui") end
+    end)
+    return parent
+end
 
 local function updateFOVCircle()
     if not guiFov then
@@ -178,10 +197,7 @@ local function updateFOVCircle()
         guiFov.Name = "CW_FOV"
         guiFov.ResetOnSpawn = false
         guiFov.IgnoreGuiInset = true
-        local parent = LocalPlayer:WaitForChild("PlayerGui")
-        pcall(function()
-            if gethui then parent = gethui() else parent = game:GetService("CoreGui") end
-        end)
+        local parent = guiParent()
         if parent:FindFirstChild("CW_FOV") then parent.CW_FOV:Destroy() end
         guiFov.Parent = parent
         fovFrame = Instance.new("Frame")
@@ -197,9 +213,37 @@ local function updateFOVCircle()
     fovFrame.Size = UDim2.new(0, fovSize * 2, 0, fovSize * 2)
     local str = fovFrame:FindFirstChildOfClass("UIStroke")
     if str then str.Color = fovColor end
-    fovFrame.Visible = aimEnabled or combat.SilentEnabled
+    fovFrame.Visible = aimEnabled
 end
 updateFOVCircle()
+
+local function updateSilentFOVCircle()
+    if not guiSilentFov then
+        guiSilentFov = Instance.new("ScreenGui")
+        guiSilentFov.Name = "CW_SilentFOV"
+        guiSilentFov.ResetOnSpawn = false
+        guiSilentFov.IgnoreGuiInset = true
+        local parent = guiParent()
+        if parent:FindFirstChild("CW_SilentFOV") then parent.CW_SilentFOV:Destroy() end
+        guiSilentFov.Parent = parent
+        silentFovFrame = Instance.new("Frame")
+        silentFovFrame.Parent = guiSilentFov
+        silentFovFrame.BackgroundTransparency = 1
+        silentFovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+        Instance.new("UICorner", silentFovFrame).CornerRadius = UDim.new(1, 0)
+        local stroke = Instance.new("UIStroke")
+        stroke.Name = "Ring"
+        stroke.Color = silentFovColor
+        stroke.Thickness = 1.5
+        stroke.Parent = silentFovFrame
+    end
+    local r = combat.SilentFov or 120
+    silentFovFrame.Size = UDim2.new(0, r * 2, 0, r * 2)
+    local str = silentFovFrame:FindFirstChild("Ring")
+    if str then str.Color = silentFovColor end
+    silentFovFrame.Visible = combat.SilentEnabled and combat.SilentFovDraw and combat.SilentFovEnabled
+end
+updateSilentFOVCircle()
 
 local function updatePredDot(pos)
     if not guiPredDot then
@@ -207,17 +251,14 @@ local function updatePredDot(pos)
         guiPredDot.Name = "CW_PredDot"
         guiPredDot.ResetOnSpawn = false
         guiPredDot.IgnoreGuiInset = true
-        local parent = LocalPlayer:WaitForChild("PlayerGui")
-        pcall(function()
-            if gethui then parent = gethui() else parent = game:GetService("CoreGui") end
-        end)
+        local parent = guiParent()
         if parent:FindFirstChild("CW_PredDot") then parent.CW_PredDot:Destroy() end
         guiPredDot.Parent = parent
         predDotFrame = Instance.new("Frame")
         predDotFrame.Parent = guiPredDot
         predDotFrame.Size = UDim2.new(0, 4, 0, 4)
         predDotFrame.AnchorPoint = Vector2.new(0.5, 0.5)
-        predDotFrame.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+        predDotFrame.BackgroundColor3 = Color3.fromRGB(0, 255, 0) -- green = aimbot
         predDotFrame.BorderSizePixel = 0
         Instance.new("UICorner", predDotFrame).CornerRadius = UDim.new(1, 0)
     end
@@ -511,6 +552,10 @@ RunService.RenderStepped:Connect(function()
     if fovFrame and fovFrame.Visible then
         local pos = getFovCenter()
         fovFrame.Position = UDim2.new(0, pos.X, 0, pos.Y)
+    end
+    if silentFovFrame and silentFovFrame.Visible then
+        local c = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        silentFovFrame.Position = UDim2.new(0, c.X, 0, c.Y)
     end
     updateESP()
     if not aimEnabled then updatePredDot(nil); return end
@@ -1065,6 +1110,74 @@ RunService.Heartbeat:Connect(function(dt)
     end)
 end)
 
+-- ── AC Bypass (coldwar_old style — hookmetamethod on Weapon AC reports) ────
+local BLOCKED = {
+    ValidateSize = true,
+    FlyBan = true,
+    WalkSpeedBan = true,
+    Tp = true,
+    FlyStrike = true,
+    SpeedBan = true,
+    TeleportBan = true,
+    NoclipBan = true,
+    Kick = true,
+    Ban = true,
+}
+local acInstalled = false
+local acWeaponRemote = nil
+local function installAcBypass()
+    if acInstalled then return true, "already installed" end
+    if not hookmetamethod then
+        warn("[CW] AC Bypass: no hookmetamethod")
+        return false, "no hookmetamethod"
+    end
+
+    -- cache Weapon remote if present (any class — name check is what matters)
+    pcall(function()
+        local remotes = RS:FindFirstChild("Remotes")
+        acWeaponRemote = remotes and remotes:FindFirstChild("Weapon")
+    end)
+
+    local ok, err = pcall(function()
+        local oldNamecall
+        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+            if combat.AcBypass and not scriptUnloaded and not checkcaller() then
+                local method = getnamecallmethod()
+                if method == "FireServer" or method == "fireServer" then
+                    local a1 = ...
+                    if type(a1) == "string" and BLOCKED[a1] then
+                        local isWeapon = acWeaponRemote and self == acWeaponRemote
+                        if not isWeapon then
+                            pcall(function()
+                                if self.Name == "Weapon" then isWeapon = true end
+                            end)
+                        end
+                        if isWeapon then
+                            return -- swallow AC report
+                        end
+                    end
+                end
+            end
+            return oldNamecall(self, ...)
+        end))
+    end)
+    acInstalled = ok
+    status.ac = ok
+    if ok then
+        print("[CW] AC Bypass installed (__namecall Weapon)")
+    else
+        warn("[CW] AC Bypass failed:", err)
+    end
+    return ok, err
+end
+
+local function uninstallAcBypass()
+    -- namecall hooks can't be removed safely once installed; just disable filter
+    combat.AcBypass = false
+    status.ac = false
+    print("[CW] AC Bypass filter disabled")
+end
+
 -- ── UI ─────────────────────────────────────────────────────────────────────
 local scriptId = "NMZ_COLDWAR_UI"
 local getGenv = getgenv or function() return _G end
@@ -1095,6 +1208,11 @@ task.defer(function()
     if scriptUnloaded then return end
     local ok2, err2 = pcall(installAdvancedHooks)
     if not ok2 then warn("[CW] advanced install error:", err2) end
+    -- AC Bypass auto-apply when enabled (no manual Install button needed)
+    if combat.AcBypass then
+        task.wait(0.2)
+        pcall(installAcBypass)
+    end
     pcall(function()
         UI.Notify({
             Title = "Hooks ready",
@@ -1155,8 +1273,10 @@ end
 
 getGenv()[scriptId] = function()
     scriptUnloaded = true
+    combat.AcBypass = false
     if Window then Window.destroy() end
     if guiFov then pcall(function() guiFov:Destroy() end) end
+    if guiSilentFov then pcall(function() guiSilentFov:Destroy() end) end
     if guiPredDot then pcall(function() guiPredDot:Destroy() end) end
     if mobileAimGui then pcall(function() mobileAimGui:Destroy() end) end
     removeAllHighlights(); removeAllBoxes(); removeAllTracers()
@@ -1169,7 +1289,8 @@ local TabSilent = UI.CreateTab(Window, "SILENT", 3)
 local TabGun = UI.CreateTab(Window, "GUN", 4)
 local TabPlayer = UI.CreateTab(Window, "PLAYER", 5)
 local TabCar = UI.CreateTab(Window, "CAR", 6)
-local TabMisc = UI.CreateTab(Window, "MISC", 7)
+local TabAC = UI.CreateTab(Window, "ANTI-CHEAT", 7)
+local TabMisc = UI.CreateTab(Window, "MISC", 8)
 
 -- ESP
 UI.CreateToggle(TabESP, "ESP Toggle", espEnabled, function(v) espEnabled = v; refreshESP() end)
@@ -1205,13 +1326,23 @@ UI.CreateToggle(TabAim, "Predict Toggle", predEnabled, function(v) predEnabled =
 UI.CreateSlider(TabAim, "Predict Strength", 0, 0.3, predStrength, function(v) return string.format("%.3f", v) end, function(v) predStrength = v end)
 
 -- SILENT
-UI.CreateLabel(TabSilent, "Bullet redirect · OFF by default")
 UI.CreateToggle(TabSilent, "Silent Aim", combat.SilentEnabled, function(v)
-    combat.SilentEnabled = v; updateFOVCircle()
+    combat.SilentEnabled = v
+    updateSilentFOVCircle()
 end)
-UI.CreateToggle(TabSilent, "Silent FOV Limit", combat.SilentFovEnabled, function(v) combat.SilentFovEnabled = v end)
-UI.CreateSlider(TabSilent, "Silent FOV", 50, 500, combat.SilentFov, function(v) return tostring(math.floor(v)) end, function(v)
+UI.CreateToggle(TabSilent, "Show Silent FOV", combat.SilentFovDraw, function(v)
+    combat.SilentFovDraw = v
+    updateSilentFOVCircle()
+end)
+UI.CreateToggle(TabSilent, "Silent FOV Limit", combat.SilentFovEnabled, function(v)
+    combat.SilentFovEnabled = v
+    updateSilentFOVCircle()
+end)
+UI.CreateSlider(TabSilent, "Silent FOV Size", 30, 400, combat.SilentFov, function(v)
+    return tostring(math.floor(v))
+end, function(v)
     combat.SilentFov = v
+    updateSilentFOVCircle()
 end)
 UI.CreateDropdown(TabSilent, "Silent Part", {
     {name = "Head", val = "Head"}, {name = "Torso", val = "Torso"}, {name = "HumanoidRootPart", val = "HumanoidRootPart"},
@@ -1221,7 +1352,6 @@ UI.CreateToggle(TabSilent, "Exclude Teammates", combat.SilentExcludeTeammates, f
 end)
 
 -- GUN
-UI.CreateLabel(TabGun, "Weapon mods · OFF by default")
 UI.CreateToggle(TabGun, "Low Recoil", combat.LowRecoil, function(v) combat.LowRecoil = v end)
 UI.CreateSlider(TabGun, "Recoil Mult", 0, 1, combat.RecoilMult, function(v) return string.format("%.2f", v) end, function(v)
     combat.RecoilMult = v
@@ -1255,7 +1385,6 @@ UI.CreateToggle(TabGun, "Infinite Magazines", combat.InfiniteMags, function(v)
 end)
 
 -- PLAYER
-UI.CreateLabel(TabPlayer, "Character / utility · OFF by default")
 UI.CreateToggle(TabPlayer, "Instant Heal", combat.InstantHeal, function(v)
     combat.InstantHeal = v
     if v and not status.heal then
@@ -1267,7 +1396,6 @@ UI.CreateToggle(TabPlayer, "Fast Revive", combat.FastRevive, function(v)
 end)
 
 -- CAR
-UI.CreateLabel(TabCar, "Vehicle · OFF by default")
 UI.CreateToggle(TabCar, "Drive Any Car", combat.DriveAnyCar, function(v)
     combat.DriveAnyCar = v
     if v and not status.drive then
@@ -1290,10 +1418,27 @@ UI.CreateToggle(TabCar, "Quick Enter/Exit", combat.QuickClimb, function(v)
     end
 end)
 
+-- ANTI-CHEAT (auto-applies when enabled)
+UI.CreateToggle(TabAC, "AC Bypass", combat.AcBypass, function(v)
+    combat.AcBypass = v
+    if not v then
+        uninstallAcBypass()
+        UI.Notify({Title = "AC Bypass", Content = "Disabled", Duration = 2})
+        return
+    end
+    local ok, err = installAcBypass()
+    UI.Notify({
+        Title = ok and "AC Bypass" or "AC Bypass",
+        Content = ok and "Enabled" or tostring(err),
+        Duration = 3,
+    })
+    if not ok then combat.AcBypass = false end
+end)
+
 -- MISC
 UI.CreateButton(TabMisc, "Save Config", function()
     SaveConfig()
-    UI.Notify({Title = "Saved", Content = "Settings saved.", Duration = 3})
+    UI.Notify({Title = "Config", Content = "Saved", Duration = 2})
 end)
 UI.CreateButton(TabMisc, "Rejoin", function()
     TeleportService:Teleport(game.PlaceId, LocalPlayer)
@@ -1315,6 +1460,5 @@ end)
 UI.CreateButton(TabMisc, "Unload Script", function()
     if getGenv()[scriptId] then getGenv()[scriptId]() end
 end)
-UI.CreateLabel(TabMisc, "ESP · Aim · Silent · Gun · Player · Car")
 
 refreshESP()

@@ -31,6 +31,11 @@
     KEEP IT OPEN, AND RESPECT THE DEVELOPERS' VISION.
     ================================================================================
 --]]
+local TARGET_PLACE_ID = 3678761576
+if game.PlaceId ~= TARGET_PLACE_ID then
+    error("[NMZ] Entrenched WW1 only — PlaceId " .. tostring(TARGET_PLACE_ID) .. " required (got " .. tostring(game.PlaceId) .. ")", 0)
+end
+
 local isExecutorSupported = true
 if type(hookfunction) ~= "function" then
     isExecutorSupported = false
@@ -92,6 +97,7 @@ local currentTool = nil
 local reloadConn = nil
 local scriptUnloadedLocal = false
 local silentHookInstalled = false
+local installSilentAimAll -- forward decl (defined after aim helpers / UI)
 
 -- Resolve gun from equip cache OR currently held tool (fixes silent aim after late inject).
 local function resolveGunContext()
@@ -327,6 +333,10 @@ if success and wm and type(wm) == "table" then
     if getgenv().NMZ_Originals.Shoot then
         local oldShoot = getgenv().NMZ_Originals.Shoot
         local newShoot = newcclosure(function(data, ...)
+            if type(data) == "table" and data.Tool then
+                currentTool = data.Tool
+                currentVelocity = data.Tool:GetAttribute("Velocity") or currentVelocity or 500
+            end
             if fastBoltEnabled and type(data) == "table" and data.Tool and data.Tool:GetAttribute("ToolType") == "Bolt Action" then
                 local toolName = data.Tool.Name
                 local delay = 1.3
@@ -1121,10 +1131,14 @@ local function getClosestEnemy()
     return closest, bestPos
 end
 
+local silentCachedPart, silentCachedPos = nil, nil
+
 local function getClosestSilentEnemy()
+    local cam = workspace.CurrentCamera or Camera
+    if not cam then return nil, nil end
     local center
     if centerFovEnabled then
-        center = Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)
+        center = Vector2.new(cam.ViewportSize.X/2, cam.ViewportSize.Y/2)
     else
         local mousePos = UserInputService:GetMouseLocation()
         center = Vector2.new(mousePos.X, mousePos.Y)
@@ -1133,26 +1147,38 @@ local function getClosestSilentEnemy()
     local closestDist = fovSize
     local bestPos = nil
     local myChar = LocalPlayer.Character
-    local myPos = myChar and myChar:FindFirstChild("HumanoidRootPart") and myChar.HumanoidRootPart.Position
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    local myPos = myRoot and myRoot.Position
     for _, plr in pairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character then
             local humanoid = plr.Character:FindFirstChildOfClass("Humanoid")
             if humanoid and humanoid.Health > 0 and (not LocalPlayer.Team or plr.Team ~= LocalPlayer.Team) then
                 local char = plr.Character
-                local part = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+                local part = char:FindFirstChild(aimPart)
+                    or char:FindFirstChild("Head")
+                    or char:FindFirstChild("HumanoidRootPart")
                 if part then
                     local physicalDist = myPos and (part.Position - myPos).Magnitude or 0
                     if physicalDist <= silentAimDistance then
-                        local screenPos, onScreen = Camera:WorldToViewportPoint(part.Position)
-                        if onScreen then
+                        local screenPos, onScreen = cam:WorldToViewportPoint(part.Position)
+                        if onScreen and screenPos.Z > 0 then
                             local dist = (center - Vector2.new(screenPos.X, screenPos.Y)).Magnitude
                             if dist < closestDist then
+                                -- Prefer wall-checked bone; still lock if blocked (silent = through cover OK)
                                 local targetPos = getBestTargetPos(char)
-                                if targetPos then
-                                    closestDist = dist
-                                    closest = part
-                                    bestPos = targetPos
+                                if not targetPos then
+                                    if aimPart == "Head" and char:FindFirstChild("Head") then
+                                        targetPos = char.Head.Position
+                                    else
+                                        local torso = char:FindFirstChild("Torso")
+                                            or char:FindFirstChild("UpperTorso")
+                                            or char:FindFirstChild("HumanoidRootPart")
+                                        targetPos = (torso and torso.Position) or part.Position
+                                    end
                                 end
+                                closestDist = dist
+                                closest = part
+                                bestPos = targetPos
                             end
                         end
                     end
@@ -1161,6 +1187,63 @@ local function getClosestSilentEnemy()
         end
     end
     return closest, bestPos
+end
+
+local function computeSilentAimPos()
+    local part, pos = getClosestSilentEnemy()
+    if not part then
+        silentCachedPart, silentCachedPos = nil, nil
+        return nil, nil
+    end
+    local aimPos = pos or part.Position
+    if predEnabled then
+        local tool, vel = resolveGunContext()
+        local originPart = LocalPlayer.Character
+            and (LocalPlayer.Character:FindFirstChild("Head") or LocalPlayer.Character:FindFirstChild("HumanoidRootPart"))
+        local tVel = part.AssemblyLinearVelocity or part.Velocity or Vector3.zero
+        if originPart and vel and vel > 1 then
+            local r = aimPos - originPart.Position
+            local vVec = tVel - (originPart.AssemblyLinearVelocity or originPart.Velocity or Vector3.zero)
+            local a = vVec:Dot(vVec) - (vel * vel)
+            local b = 2 * r:Dot(vVec)
+            local c0 = r:Dot(r)
+            local disc = b * b - 4 * a * c0
+            if disc >= 0 and math.abs(a) > 1e-6 then
+                local sqrtDisc = math.sqrt(disc)
+                local t1 = (-b - sqrtDisc) / (2 * a)
+                local t2 = (-b + sqrtDisc) / (2 * a)
+                local tVal
+                if t1 > 0 and t2 > 0 then tVal = math.min(t1, t2)
+                elseif t1 > 0 then tVal = t1
+                elseif t2 > 0 then tVal = t2 end
+                if tVal then
+                    aimPos = aimPos + tVel * tVal + Vector3.new(0, 0.5 * workspace.Gravity * tVal * tVal, 0)
+                end
+            else
+                aimPos = aimPos + tVel * predStrength
+            end
+        else
+            aimPos = aimPos + tVel * predStrength
+        end
+    end
+    silentCachedPart, silentCachedPos = part, aimPos
+    return aimPos, part
+end
+
+-- Keep silent target warm so hooks only read cache (no heavy work mid-fire)
+do
+    local frame = 0
+    RunService.Heartbeat:Connect(function()
+        if scriptUnloadedLocal or not silentAimEnabled then
+            if not silentAimEnabled then silentCachedPart, silentCachedPos = nil, nil end
+            return
+        end
+        frame = frame + 1
+        if frame >= 2 then
+            frame = 0
+            pcall(computeSilentAimPos)
+        end
+    end)
 end
 
 local function cameraAim(target, targetPos)
@@ -1538,8 +1621,7 @@ getGenv()[scriptId] = function()
                 pcall(debug.setupvalue, inner.Owner, inner.Key, inner.Func)
             elseif inner.Method == "env" and inner.Env and inner.Key then
                 pcall(rawset, inner.Env, inner.Key, inner.Func)
-            elseif isExecutorSupported and hookfunction then
-                -- hookfn path: restore by re-hooking original body if we still have a live ref
+            elseif type(hookfunction) == "function" then
                 pcall(function()
                     if inner.Live then
                         hookfunction(inner.Live, inner.Func)
@@ -1547,7 +1629,13 @@ getGenv()[scriptId] = function()
                 end)
             end
         end
+        -- meta hooks stay installed but silentAimEnabled is forced off above
+        getgenv().NMZ_Originals.MetaSilent = nil
+        getgenv().NMZ_Originals.InnerShoot = nil
     end
+    silentAimEnabled = false
+    silentHookInstalled = false
+    silentCachedPart, silentCachedPos = nil, nil
     getGenv()[scriptId] = nil
 end
 
@@ -1611,15 +1699,24 @@ UI.CreateToggle(TabAim, "Center FOV", centerFovEnabled, function(Value)
     centerFovEnabled = Value
 end)
 
-UI.CreateLabel(TabSilent, "⚠️ Note: Silent Aim & Wall Check may be unstable on Solara and Xeno")
+UI.CreateLabel(TabSilent, "Silent Aim: multi-hook (WeaponModule + Mouse.Hit + Raycast). FOV shared with Aimbot.")
 UI.CreateToggle(TabSilent, "Silent Aim Toggle", silentAimEnabled, function(Value)
     silentAimEnabled = Value
-    if Value and not silentHookInstalled then
-        UI.Notify({
-            Title = "Silent Aim Inactive",
-            Content = "Hook not installed. Check F9 for [NMZ] logs or re-execute after spawning with a gun.",
-            Duration = 4
-        })
+    if Value then
+        if not silentHookInstalled then
+            pcall(installSilentAimAll)
+        end
+        if not silentHookInstalled then
+            UI.Notify({
+                Title = "Silent Aim Inactive",
+                Content = "Hook not installed yet. Equip a gun, wait ~2s, toggle again. Check F9 for [NMZ] logs.",
+                Duration = 4
+            })
+        else
+            pcall(computeSilentAimPos)
+        end
+    else
+        silentCachedPart, silentCachedPos = nil, nil
     end
 end)
 UI.CreateSlider(TabSilent, "Silent Max Distance", 100, 3000, silentAimDistance, function(v) return tostring(math.floor(v)) end, function(Value)
@@ -1762,33 +1859,39 @@ end)
 UI.CreateButton(TabMisc, "Unload Script", function()
     if getGenv()[scriptId] then getGenv()[scriptId]() end
 end)
-UI.CreateLabel(TabMisc, "Script Version: V1.5.1")
+UI.CreateLabel(TabMisc, "Script Version: V1.5.2")
 
 refreshESP()
 
--- Luau often has empty getfenv — find aim-calc via upvalues / getgc, hook with hookfunction.
+-- Silent Aim multi-path installer.
+-- Bug: old code scanned wrapped wm.Shoot (fast-bolt wrapper) so aim-calc never found.
+-- Fix: always scan original Shoot + nested upvalues/env/getgc + Mouse.Hit/namecall fallbacks.
+local getnamecallmethod = getnamecallmethod or function() return "" end
+local hookmetamethod = hookmetamethod
+local checkcaller = checkcaller or function() return false end
+
 local function getFnName(fn)
     local n = ""
     pcall(function() n = debug.info(fn, "n") or "" end)
-    return n
+    if n == "" then pcall(function() local i = debug.getinfo(fn); n = (i and (i.name or i.namewhat)) or "" end) end
+    return n or ""
 end
 
 local function iterUpvalues(fn)
     local list = {}
     if type(fn) ~= "function" then return list end
-    -- indexed API
-    for i = 1, 64 do
+    for i = 1, 80 do
         local ok, name, val = pcall(debug.getupvalue, fn, i)
-        if not ok or name == nil then break end
+        if not ok then break end
+        if name == nil and val == nil then break end
         table.insert(list, { index = i, name = name, value = val, owner = fn })
     end
-    -- table API fallback (some executors)
     if #list == 0 then
         pcall(function()
             local ups = debug.getupvalues(fn)
             if type(ups) == "table" then
                 for k, v in pairs(ups) do
-                    local idx = type(k) == "number" and k or #list + 1
+                    local idx = type(k) == "number" and k or (#list + 1)
                     table.insert(list, { index = idx, name = tostring(k), value = v, owner = fn })
                 end
             end
@@ -1798,28 +1901,147 @@ local function iterUpvalues(fn)
 end
 
 local aimNameSet = {
-    Crosshair = true, crosshair = true,
+    Crosshair = true, crosshair = true, GetCrosshair = true,
     bulletMagnetism = true, BulletMagnetism = true, magnetism = true,
     GetAim = true, getAim = true, AimPos = true, GetHitPosition = true,
     hitPosition = true, GetTarget = true, GetBulletTarget = true,
-    bulletTarget = true, CalculateHit = true, getHit = true
+    bulletTarget = true, CalculateHit = true, getHit = true,
+    GetHitPos = true, hitPos = true, AimPoint = true, GetAimPoint = true,
+    muzzlePoint = true, GetMuzzle = true, GetShootPos = true, shootPos = true,
+    GetDirection = true, getDirection = true, BulletDirection = true,
 }
 
 local function isAimName(n)
     if not n or n == "" then return false end
     if aimNameSet[n] then return true end
-    local low = string.lower(n)
+    local low = string.lower(tostring(n))
     return low:find("crosshair", 1, true)
         or low:find("magnet", 1, true)
         or low:find("aimpos", 1, true)
+        or low:find("aimpoint", 1, true)
         or low:find("hittarget", 1, true)
+        or low:find("hitpos", 1, true)
         or low:find("bullettarget", 1, true)
+        or low:find("shootpos", 1, true)
+        or low:find("muzzle", 1, true)
 end
 
--- Returns: method ("upvalue"|"hookfn"|"env"), owner, indexOrKey, func, label
-local function findAimCalc()
-    local shootFn = rawget(wm, "Shoot")
-    if type(shootFn) ~= "function" then return nil end
+local function silentAimWorldPos()
+    if silentCachedPos then return silentCachedPos end
+    local pos = select(1, computeSilentAimPos())
+    return pos
+end
+
+local function makeAimRedirect(oldFn)
+    return newcclosure(function(...)
+        if noSpreadEnabled then
+            local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local oldALV = hrp.AssemblyLinearVelocity
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                task.defer(function()
+                    if hrp and hrp.Parent then hrp.AssemblyLinearVelocity = oldALV end
+                end)
+            end
+        end
+
+        if silentAimEnabled then
+            local pos = silentAimWorldPos()
+            if pos then return pos end
+        end
+
+        if noSpreadEnabled then
+            local ok, res = pcall(function()
+                local mouse = LocalPlayer:GetMouse()
+                local rayParams = RaycastParams.new()
+                rayParams.FilterType = Enum.RaycastFilterType.Exclude
+                local ignore = {workspace.CurrentCamera}
+                if LocalPlayer.Character then table.insert(ignore, LocalPlayer.Character) end
+                rayParams.FilterDescendantsInstances = ignore
+                local cam = workspace.CurrentCamera
+                if not cam then return nil end
+                local ray = cam:ScreenPointToRay(mouse.X, mouse.Y)
+                local hit = workspace:Raycast(ray.Origin, ray.Direction * 3000, rayParams)
+                if hit then return hit.Position end
+                return ray.Origin + ray.Direction * 3000
+            end)
+            if ok and res then return res end
+        end
+
+        return oldFn(...)
+    end)
+end
+
+local function tryInstallOnFn(oldFn, method, owner, idxOrKey, foundName, dump)
+    if type(oldFn) ~= "function" then return false end
+    if not getgenv().NMZ_Originals then getgenv().NMZ_Originals = {} end
+
+    local oldShootFn = oldFn
+    if getgenv().NMZ_Originals.InnerShoot and getgenv().NMZ_Originals.InnerShoot.Func then
+        oldShootFn = getgenv().NMZ_Originals.InnerShoot.Func
+    end
+
+    local newShootFn = makeAimRedirect(function(...)
+        return oldShootFn(...)
+    end)
+
+    local installed = false
+    local usedMethod = method
+    -- real hookfunction only (stub returns old without replacing — would fake success)
+    local canHookFn = isExecutorSupported and type(hookfunction) == "function"
+
+    -- 1) hookfunction (strongest)
+    if canHookFn then
+        local okHook, ret = pcall(hookfunction, oldFn, newShootFn)
+        if okHook and type(ret) == "function" and ret ~= newShootFn then
+            oldShootFn = ret
+            installed = true
+            usedMethod = "hookfn"
+        end
+    end
+
+    -- 2) upvalue replace (works on many limited executors)
+    if not installed and owner and idxOrKey and debug.setupvalue then
+        if pcall(debug.setupvalue, owner, idxOrKey, newShootFn) then
+            installed = true
+            usedMethod = "upvalue"
+        end
+    end
+
+    -- 3) env replace
+    if not installed and owner and idxOrKey and type(owner) == "table" then
+        if pcall(rawset, owner, idxOrKey, newShootFn) then
+            installed = true
+            usedMethod = "env"
+        end
+    end
+
+    if not installed then return false end
+
+    getgenv().NMZ_Originals.InnerShoot = {
+        Method = usedMethod,
+        Owner = owner,
+        Key = idxOrKey,
+        Func = oldShootFn,
+        Live = oldFn,
+        Env = usedMethod == "env" and owner or nil,
+        Name = foundName,
+    }
+    silentHookInstalled = true
+    print("[NMZ] Silent Aim hooked via: " .. tostring(foundName) .. " (" .. tostring(usedMethod) .. ")")
+    if dump then
+        for _, line in ipairs(dump) do print("  " .. line) end
+    end
+    return true
+end
+
+local function findAndHookAimCalc()
+    -- ALWAYS prefer original Shoot (before fast-bolt wrap)
+    local shootFn = (getgenv().NMZ_Originals and getgenv().NMZ_Originals.Shoot)
+        or (wm and rawget(wm, "Shoot"))
+    if type(shootFn) ~= "function" then
+        return false, { "no Shoot function" }
+    end
 
     local dump = {}
     local function dumpFn(tag, fn)
@@ -1835,214 +2057,238 @@ local function findAimCalc()
         table.insert(dump, line)
     end
 
-    dumpFn("Shoot", shootFn)
-    local shootUps = iterUpvalues(shootFn)
-    for _, u in ipairs(shootUps) do
-        if type(u.value) == "function" then
-            dumpFn("  uv#" .. u.index .. "(" .. tostring(u.name) .. ")", u.value)
-            if isAimName(u.name) or isAimName(getFnName(u.value)) then
-                return "upvalue", u.owner, u.index, u.value, getFnName(u.value) ~= "" and getFnName(u.value) or u.name, dump
+    dumpFn("Shoot(orig)", shootFn)
+
+    local candidates = {} -- {method, owner, key, fn, name}
+
+    local function pushCandidate(method, owner, key, fn, name)
+        if type(fn) ~= "function" then return end
+        table.insert(candidates, {
+            method = method, owner = owner, key = key, fn = fn,
+            name = name or getFnName(fn) or "?",
+        })
+    end
+
+    local function scanEnv(fn)
+        local okEnv, env = pcall(getfenv, fn)
+        if not okEnv or type(env) ~= "table" then return end
+        for k, v in pairs(env) do
+            if type(v) == "function" then
+                local n = getFnName(v)
+                if isAimName(k) or isAimName(n) then
+                    pushCandidate("env", env, k, v, n ~= "" and n or tostring(k))
+                end
             end
-            -- nested upvalues one level deep (anon shoot helper)
-            for _, nu in ipairs(iterUpvalues(u.value)) do
-                if type(nu.value) == "function" then
-                    dumpFn("    uv#" .. nu.index .. "(" .. tostring(nu.name) .. ")", nu.value)
-                    if isAimName(nu.name) or isAimName(getFnName(nu.value)) then
-                        return "upvalue", nu.owner, nu.index, nu.value, getFnName(nu.value) ~= "" and getFnName(nu.value) or nu.name, dump
+        end
+    end
+
+    local function scanUps(fn, depth, prefix)
+        depth = depth or 0
+        if depth > 3 then return end
+        for _, u in ipairs(iterUpvalues(fn)) do
+            if type(u.value) == "function" then
+                local n = getFnName(u.value)
+                dumpFn((prefix or "") .. "uv#" .. u.index .. "(" .. tostring(u.name) .. ")", u.value)
+                if isAimName(u.name) or isAimName(n) then
+                    pushCandidate("upvalue", u.owner, u.index, u.value, n ~= "" and n or tostring(u.name))
+                end
+                scanEnv(u.value)
+                scanUps(u.value, depth + 1, (prefix or "") .. "  ")
+            elseif type(u.value) == "table" then
+                -- table of helpers
+                for k, v in pairs(u.value) do
+                    if type(v) == "function" and (isAimName(k) or isAimName(getFnName(v))) then
+                        pushCandidate("env", u.value, k, v, getFnName(v) ~= "" and getFnName(v) or tostring(k))
                     end
                 end
             end
         end
     end
 
-    -- getfenv path (legacy / some executors still fill it)
-    local function scanEnv(fn)
-        local okEnv, env = pcall(getfenv, fn)
-        if not okEnv or type(env) ~= "table" then return nil end
-        for k, v in pairs(env) do
-            if type(v) == "function" and (isAimName(k) or isAimName(getFnName(v))) then
-                return env, k, v, getFnName(v) ~= "" and getFnName(v) or tostring(k)
-            end
+    scanEnv(shootFn)
+    scanUps(shootFn, 0, "  ")
+
+    -- Prefer Crosshair / bulletMagnetism first
+    table.sort(candidates, function(a, b)
+        local function rank(c)
+            local n = string.lower(tostring(c.name))
+            if n:find("crosshair", 1, true) then return 0 end
+            if n:find("magnet", 1, true) then return 1 end
+            if n:find("aim", 1, true) then return 2 end
+            return 5
         end
-        return nil
-    end
-    do
-        local env, key, func, name = scanEnv(shootFn)
-        if env then return "env", env, key, func, name, dump end
-        for _, u in ipairs(shootUps) do
-            if type(u.value) == "function" then
-                local env, key, func, name = scanEnv(u.value)
-                if env then return "env", env, key, func, name, dump end
-            end
+        return rank(a) < rank(b)
+    end)
+
+    for _, c in ipairs(candidates) do
+        if tryInstallOnFn(c.fn, c.method, c.owner, c.key, c.name, dump) then
+            return true, dump
         end
     end
 
-    -- getgc: find named aim fn referenced by Shoot's closure tree
+    -- getgc fallback by name
     if getgc then
         local okGc, gcList = pcall(getgc, true)
+        if not okGc or type(gcList) ~= "table" then
+            okGc, gcList = pcall(getgc)
+        end
         if okGc and type(gcList) == "table" then
             for _, obj in ipairs(gcList) do
                 if type(obj) == "function" then
                     local n = getFnName(obj)
                     if isAimName(n) then
                         dumpFn("getgc", obj)
-                        return "hookfn", nil, nil, obj, n, dump
+                        if tryInstallOnFn(obj, "hookfn", nil, nil, n, dump) then
+                            return true, dump
+                        end
                     end
                 end
             end
         end
     end
 
-    return nil, nil, nil, nil, nil, dump
+    return false, dump
 end
 
-if success and wm and type(wm) == "table" and rawget(wm, "Shoot") then
+-- Mouse.Hit / namecall fallbacks — work even if WeaponModule aim-calc not found
+local metaHookInstalled = false
+local function installMetaSilentHooks()
+    if metaHookInstalled then return true end
+    if type(hookmetamethod) ~= "function" then return false end
+
+    local okAll = false
+
+    -- __index Mouse.Hit / Mouse.Target
     pcall(function()
-        local method, owner, idxOrKey, oldFn, foundName, dump = findAimCalc()
-
-        if dump then
-            print("[NMZ] WeaponModule.Shoot dump:")
-            for _, line in ipairs(dump) do print("  " .. line) end
-        end
-
-        if not oldFn then
-            warn("[NMZ] Silent Aim hook NOT installed — aim calc not found in WeaponModule")
-            if dump and #dump > 0 then
-                warn("[NMZ] See dump above — kirim ke dev kalau masih gagal")
-            end
-            return
-        end
-
-        if not getgenv().NMZ_Originals then getgenv().NMZ_Originals = {} end
-
-        -- Closure captures oldShootFn binding (assigned after hookfunction returns original).
-        local oldShootFn = oldFn
-        if getgenv().NMZ_Originals.InnerShoot and getgenv().NMZ_Originals.InnerShoot.Func then
-            oldShootFn = getgenv().NMZ_Originals.InnerShoot.Func
-        end
-
-        local newShootFn = newcclosure(function(...)
-            if noSpreadEnabled then
-                local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    local oldALV = hrp.AssemblyLinearVelocity
-                    hrp.AssemblyLinearVelocity = Vector3.zero
-                    task.defer(function()
-                        if hrp then hrp.AssemblyLinearVelocity = oldALV end
-                    end)
+        local oldIndex
+        oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
+            if silentAimEnabled and not checkcaller() then
+                local k = key
+                if type(k) == "string" then
+                    if self == Mouse and (k == "Hit" or k == "hit") then
+                        local pos = silentAimWorldPos()
+                        if pos then
+                            local cam = workspace.CurrentCamera
+                            local origin = (cam and cam.CFrame.Position)
+                                or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") and LocalPlayer.Character.Head.Position)
+                                or pos
+                            return CFrame.new(pos, pos + (pos - origin))
+                        end
+                    elseif self == Mouse and (k == "Target" or k == "target") then
+                        if silentCachedPart then return silentCachedPart end
+                    end
                 end
             end
-
-            if silentAimEnabled then
-                local ok, res = pcall(function()
-                    local tool, vel = resolveGunContext()
-                    local c, bestPos = getClosestSilentEnemy()
-                    local head = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head")
-                    if c and vel and head then
-                        local pos = bestPos or c.Position
-                        local tVel = c.AssemblyLinearVelocity or c.Velocity or Vector3.new()
-                        local r = pos - head.Position
-                        local vVec = tVel - (head.AssemblyLinearVelocity or head.Velocity or Vector3.new())
-                        local a = vVec:Dot(vVec) - (vel * vel)
-                        local b = 2 * r:Dot(vVec)
-                        local c0 = r:Dot(r)
-                        local disc = b * b - 4 * a * c0
-                        if disc >= 0 and math.abs(a) > 1e-6 then
-                            local sqrtDisc = math.sqrt(disc)
-                            local t1 = (-b - sqrtDisc) / (2 * a)
-                            local t2 = (-b + sqrtDisc) / (2 * a)
-                            local tVal
-                            if t1 > 0 and t2 > 0 then tVal = math.min(t1, t2)
-                            elseif t1 > 0 then tVal = t1
-                            elseif t2 > 0 then tVal = t2 end
-                            if tVal then
-                                return pos + tVel * tVal + Vector3.new(0, 0.5 * workspace.Gravity * tVal * tVal, 0)
-                            end
-                        end
-                        return pos
-                    end
-                end)
-                if ok and res then return res end
-            end
-
-            if noSpreadEnabled then
-                local ok, res = pcall(function()
-                    local mouse = LocalPlayer:GetMouse()
-                    local rayParams = RaycastParams.new()
-                    rayParams.FilterType = Enum.RaycastFilterType.Exclude
-                    if LocalPlayer.Character then
-                        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, workspace.CurrentCamera}
-                    else
-                        rayParams.FilterDescendantsInstances = {workspace.CurrentCamera}
-                    end
-                    local cam = workspace.CurrentCamera
-                    local ray = cam:ScreenPointToRay(mouse.X, mouse.Y)
-                    local hit = workspace:Raycast(ray.Origin, ray.Direction * 3000, rayParams)
-                    if hit then return hit.Position end
-                    return ray.Origin + ray.Direction * 3000
-                end)
-                if ok and res then return res end
-            end
-
-            return oldShootFn(...)
-        end)
-
-        local installed = false
-
-        -- 1) hookfunction on the function object (best on Potassium)
-        if isExecutorSupported and hookfunction then
-            local okHook, ret = pcall(hookfunction, oldFn, newShootFn)
-            if okHook and type(ret) == "function" then
-                oldShootFn = ret
-                installed = true
-                method = "hookfn"
-            end
-        end
-
-        -- 2) upvalue replace
-        if not installed and method == "upvalue" and owner and idxOrKey and debug.setupvalue then
-            local okUv = pcall(debug.setupvalue, owner, idxOrKey, newShootFn)
-            if okUv then installed = true end
-        end
-
-        -- 3) env replace (legacy)
-        if not installed and method == "env" and owner and idxOrKey then
-            local okEnv = pcall(rawset, owner, idxOrKey, newShootFn)
-            if okEnv then installed = true end
-        end
-
-        if not installed then
-            warn("[NMZ] Silent Aim found (" .. tostring(foundName) .. ") but failed to hook")
-            return
-        end
-
-        getgenv().NMZ_Originals.InnerShoot = {
-            Method = method,
-            Owner = owner,
-            Key = idxOrKey,
-            Func = oldShootFn,
-            Live = oldFn,
-            Env = method == "env" and owner or nil
-        }
-        silentHookInstalled = true
-        print("[NMZ] Silent Aim hooked via: " .. tostring(foundName) .. " (" .. tostring(method) .. ")")
+            return oldIndex(self, key)
+        end))
+        okAll = true
+        print("[NMZ] Silent Aim meta: __index Mouse.Hit")
     end)
+
+    -- __namecall: legacy FindPartOnRay* only (do NOT blanket-hook Raycast — breaks wallcheck/game)
+    pcall(function()
+        local oldNamecall
+        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+            if silentAimEnabled and not checkcaller() then
+                local method = getnamecallmethod()
+                if method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
+                    local pos = silentAimWorldPos()
+                    if pos then
+                        local origin = (workspace.CurrentCamera and workspace.CurrentCamera.CFrame.Position)
+                            or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Head") and LocalPlayer.Character.Head.Position)
+                        if origin then
+                            local dist = (pos - origin).Magnitude
+                            local ray = Ray.new(origin, (pos - origin).Unit * math.max(dist, 1))
+                            return oldNamecall(self, ray, select(2, ...))
+                        end
+                    end
+                end
+            end
+            return oldNamecall(self, ...)
+        end))
+        okAll = true
+        print("[NMZ] Silent Aim meta: __namecall FindPartOnRay")
+    end)
+
+    if okAll then
+        metaHookInstalled = true
+        silentHookInstalled = true -- treat as installed so UI doesn't spam fail
+        if not getgenv().NMZ_Originals then getgenv().NMZ_Originals = {} end
+        getgenv().NMZ_Originals.MetaSilent = true
+    end
+    return okAll
+end
+
+installSilentAimAll = function()
+    local hasInner = getgenv().NMZ_Originals and getgenv().NMZ_Originals.InnerShoot
+    local hasMeta = metaHookInstalled or (getgenv().NMZ_Originals and getgenv().NMZ_Originals.MetaSilent)
+    if hasInner and hasMeta then
+        silentHookInstalled = true
+        return true
+    end
+
+    local okMod = hasInner and true or false
+    local dump = nil
+    if not hasInner and success and wm and type(wm) == "table" then
+        local ok, d = findAndHookAimCalc()
+        okMod, dump = ok, d
+        if dump and not ok then
+            print("[NMZ] WeaponModule.Shoot dump (no aim calc yet):")
+            for _, line in ipairs(dump) do print("  " .. line) end
+        end
+    end
+
+    local okMeta = hasMeta or installMetaSilentHooks()
+
+    if okMod or okMeta then
+        silentHookInstalled = true
+        return true
+    end
+    return false
+end
+
+-- Install now + retry (module/upvalues sometimes not ready at inject)
+do
+    local ok = false
+    pcall(function() ok = installSilentAimAll() end)
+    if not ok then
+        task.spawn(function()
+            for i = 1, 8 do
+                if scriptUnloadedLocal or silentHookInstalled then break end
+                task.wait(1.25)
+                pcall(function()
+                    if installSilentAimAll() then
+                        print("[NMZ] Silent Aim installed on retry #" .. i)
+                    end
+                end)
+            end
+            if not silentHookInstalled then
+                warn("[NMZ] Silent Aim hook NOT installed after retries — check F9 dump")
+            end
+        end)
+    end
 end
 
 print("MNZ ENTRENCHED WW1 - SCC UI LOADED")
 
 task.spawn(function()
-    task.wait(1.5)
-    if not isExecutorSupported then
+    task.wait(2.5)
+    if not isExecutorSupported and not silentHookInstalled then
         UI.Notify({
             Title = "Limited Executor",
-            Content = "No Recoil/No Spread use V1.5 attrs + soft equip. Silent Aim/Fast Bolt may fail. Prefer Camera aim.",
+            Content = "Silent Aim may need hookfunction/hookmetamethod. Prefer Camera aim if hooks fail.",
             Duration = 6
         })
-    elseif not silentHookInstalled then
+    elseif silentHookInstalled then
+        UI.Notify({
+            Title = "Silent Aim Ready",
+            Content = "Hook active. Toggle Silent Aim + keep enemy in FOV then fire.",
+            Duration = 4
+        })
+    else
         UI.Notify({
             Title = "Silent Aim Hook Failed",
-            Content = "Aim calc not found. Open F9 and send the [NMZ] WeaponModule.Shoot dump lines.",
+            Content = "Aim calc not found. Open F9, copy [NMZ] dump lines, re-execute after equipping a gun.",
             Duration = 7
         })
     end
